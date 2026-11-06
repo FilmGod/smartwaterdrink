@@ -72,6 +72,10 @@ h3{margin:1.2rem 0 .4rem;font-weight:600;color:var(--lagoon);font-size:1.05rem}
 .g-modal-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:.35rem}
 .g-next-btn{background:#1a73e8;border-color:#1a73e8;color:#fff;padding:.55rem 1.25rem;border-radius:999px;font-weight:600}
 .g-next-btn:hover{background:#1557b0;color:#fff}
+.g-another-btn{margin-bottom:.75rem}
+.g-oauth-setup{margin-top:1.1rem;padding-top:.75rem;border-top:1px dashed #dadce0;font-size:.82rem;color:#5f6368}
+.g-oauth-setup summary{cursor:pointer;font-weight:600;user-select:none}
+.g-oauth-box{margin-top:.55rem;background:#f8fafd;padding:.65rem .75rem;border-radius:10px;border:1px solid #e0e4e8}
 
 /* ==================== HEADER & SLIDING TABS ==================== */
 .app-shell{min-height:100vh;display:flex;flex-direction:column}

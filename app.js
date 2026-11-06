@@ -825,23 +825,39 @@
     const list = getSavedAccounts();
     const box = $('savedAccounts');
     const modalList = $('modalAccountList');
+    const anotherBtn = $('useAnotherAccBtn');
+    const form = $('gmailForm');
     if (modalList) {
       if (list.length) {
         modalList.innerHTML = list.map(a => {
           const disp = a.name || a.email.split('@')[0];
           const init = (disp[0] || 'G').toUpperCase();
+          const ava = a.picture
+            ? `<img src="${a.picture}" alt="" class="g-acc-ava" style="object-fit:cover">`
+            : `<span class="g-acc-ava">${init}</span>`;
           return `
-            <button type="button" class="g-acc-row" data-email="${a.email}" data-name="${a.name || ''}">
-              <span class="g-acc-ava">${init}</span>
+            <button type="button" class="g-acc-row" data-email="${a.email}" data-name="${a.name || ''}" data-pic="${a.picture || ''}">
+              ${ava}
               <div><strong>${disp}</strong><small>${a.email}</small></div>
             </button>
           `;
         }).join('');
         modalList.querySelectorAll('.g-acc-row').forEach(btn => {
-          btn.onclick = () => loginWithGmail(btn.dataset.email, btn.dataset.name);
+          btn.onclick = () => loginWithGmail(btn.dataset.email, btn.dataset.name, btn.dataset.pic);
         });
+        if (anotherBtn && form) {
+          anotherBtn.hidden = false;
+          form.hidden = true;
+          anotherBtn.onclick = () => {
+            anotherBtn.hidden = true;
+            form.hidden = false;
+            setTimeout(() => $('gmailInput')?.focus(), 40);
+          };
+        }
       } else {
         modalList.innerHTML = '';
+        if (anotherBtn) anotherBtn.hidden = true;
+        if (form) form.hidden = false;
       }
     }
     if (!list.length) {
@@ -849,14 +865,14 @@
       return;
     }
     box.hidden = false;
-    box.innerHTML = `<p class="muted">บัญชี Google ที่เคยเข้าใช้ในเครื่องนี้</p>` + list.map(a => `
-      <button type="button" class="acc-chip" data-email="${a.email}" data-name="${a.name || ''}">
+    box.innerHTML = `<p class="muted">เลือกบัญชี Google ของคุณ</p>` + list.map(a => `
+      <button type="button" class="acc-chip" data-email="${a.email}" data-name="${a.name || ''}" data-pic="${a.picture || ''}">
         <div><strong>${a.name || a.email.split('@')[0]}</strong><small>${a.email}</small></div>
         <span>เข้าใช้ →</span>
       </button>
     `).join('');
     box.querySelectorAll('.acc-chip').forEach(btn => {
-      btn.onclick = () => loginWithGmail(btn.dataset.email, btn.dataset.name);
+      btn.onclick = () => loginWithGmail(btn.dataset.email, btn.dataset.name, btn.dataset.pic);
     });
   }
 
@@ -884,7 +900,7 @@
     render();
   }
 
-  async function loginWithGmail(rawEmail, rawName) {
+  async function loginWithGmail(rawEmail, rawName, rawPic) {
     const email = (rawEmail || '').trim().toLowerCase();
     const err = $('loginErr');
     if (!email) {
@@ -894,7 +910,8 @@
     err.textContent = '';
     if ($('googleModal')) $('googleModal').hidden = true;
     const name = (rawName || '').trim() || email.split('@')[0];
-    state.user = { email, name };
+    const picture = rawPic || '';
+    state.user = { email, name, picture };
     rememberAccount(state.user);
 
     // Fetch cloud-synced state for this Gmail user if available
@@ -927,7 +944,12 @@
     $('appView').hidden = false;
     $('userName').textContent = state.user.name || state.user.email.split('@')[0];
     $('userEmail').textContent = state.user.email;
-    $('userAvatar').textContent = (state.user.name || state.user.email)[0].toUpperCase();
+    const ava = $('userAvatar');
+    if (state.user.picture) {
+      ava.innerHTML = `<img src="${state.user.picture}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+    } else {
+      ava.textContent = (state.user.name || state.user.email)[0].toUpperCase();
+    }
     applyStateToUI();
   }
 
@@ -936,11 +958,73 @@
     loginWithGmail($('gmailInput').value, $('gmailName').value);
   };
 
+  let googleTokenClient = null;
+  let activeGoogleClientId = localStorage.getItem('swd-gclient-id') || '';
+
+  function setupGoogleOAuth(clientId) {
+    if (!clientId) return;
+    activeGoogleClientId = clientId.trim();
+    if ($('gClientIdInput')) $('gClientIdInput').value = activeGoogleClientId;
+    const initGis = () => {
+      if (window.google?.accounts?.oauth2) {
+        googleTokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: activeGoogleClientId,
+          scope: 'openid email profile',
+          prompt: 'select_account',
+          callback: async resp => {
+            if (resp && resp.access_token) {
+              try {
+                const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: { Authorization: `Bearer ${resp.access_token}` }
+                });
+                const info = await r.json();
+                if (info.email) {
+                  loginWithGmail(info.email, info.name || info.given_name || '', info.picture || '');
+                }
+              } catch (_) {}
+            }
+          }
+        });
+      }
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: activeGoogleClientId,
+          callback: resp => {
+            try {
+              const payload = JSON.parse(atob(resp.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+              if (payload.email) loginWithGmail(payload.email, payload.name || '', payload.picture || '');
+            } catch (_) {}
+          }
+        });
+        const wrap = $('gBtnWrap');
+        if (wrap) {
+          wrap.hidden = false;
+          window.google.accounts.id.renderButton(wrap, { theme: 'outline', size: 'large', shape: 'pill' });
+        }
+      }
+    };
+    if (window.google?.accounts) {
+      initGis();
+    } else {
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true;
+      s.onload = initGis;
+      document.head.appendChild(s);
+    }
+  }
+
   function openGoogleModal() {
+    if (googleTokenClient) {
+      googleTokenClient.requestAccessToken({ prompt: 'select_account' });
+      return;
+    }
     renderSavedAccounts();
     if ($('googleModal')) {
       $('googleModal').hidden = false;
-      setTimeout(() => $('gmailInput')?.focus(), 50);
+      if (!$('gmailForm')?.hidden) {
+        setTimeout(() => $('gmailInput')?.focus(), 50);
+      }
     }
   }
   function closeGoogleModal() {
@@ -952,6 +1036,34 @@
   if ($('googleModal')) {
     $('googleModal').onclick = e => {
       if (e.target === $('googleModal')) closeGoogleModal();
+    };
+  }
+  if ($('saveGClientIdBtn')) {
+    $('saveGClientIdBtn').onclick = async () => {
+      const cid = ($('gClientIdInput')?.value || '').trim();
+      const st = $('gClientIdStatus');
+      if (!cid) {
+        localStorage.removeItem('swd-gclient-id');
+        googleTokenClient = null;
+        if (st) st.textContent = 'ล้างค่า Client ID แล้ว';
+        return;
+      }
+      localStorage.setItem('swd-gclient-id', cid);
+      try {
+        await fetch('/api/google-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ googleClientId: cid })
+        });
+      } catch (_) {}
+      setupGoogleOAuth(cid);
+      if (st) st.textContent = '✅ บันทึกแล้ว! กดปุ่มเข้าสู่ระบบด้วย Google เพื่อเลือกบัญชีได้เลย';
+      setTimeout(() => {
+        if (googleTokenClient) {
+          closeGoogleModal();
+          googleTokenClient.requestAccessToken({ prompt: 'select_account' });
+        }
+      }, 600);
     };
   }
 
@@ -966,32 +1078,8 @@
   fetch('/api/vapid-public-key').then(r => r.json()).then(({ googleClientId, hasDefaultLineToken, lineBotInfo }) => {
     if (hasDefaultLineToken) serverHasLineToken = true;
     if (lineBotInfo) renderLineBotBanner(lineBotInfo);
-    if (googleClientId) {
-      const initGis = () => {
-        if (!window.google?.accounts?.id) return;
-        window.google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: resp => {
-            try {
-              const payload = JSON.parse(atob(resp.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-              if (payload.email) loginWithGmail(payload.email, payload.name || '');
-            } catch (_) {}
-          }
-        });
-        const wrap = $('gBtnWrap');
-        wrap.hidden = false;
-        window.google.accounts.id.renderButton(wrap, { theme: 'outline', size: 'large', shape: 'pill' });
-      };
-      if (window.google?.accounts?.id) {
-        initGis();
-      } else {
-        const s = document.createElement('script');
-        s.src = 'https://accounts.google.com/gsi/client';
-        s.async = true;
-        s.onload = initGis;
-        document.head.appendChild(s);
-      }
-    }
+    const cid = googleClientId || activeGoogleClientId;
+    if (cid) setupGoogleOAuth(cid);
   }).catch(() => {});
 
   /* ---------- User Dashboard ---------- */
