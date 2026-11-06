@@ -595,24 +595,60 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
 
   if (url.pathname === '/api/user-state') {
     store.users ||= {};
+    store.pendingGlobalLineOps ||= [];
     if (req.method === 'GET') {
       const email = (url.searchParams.get('email') || '').toLowerCase().trim();
+      const u = store.users[email] || null;
+      let pendingLineOps = [];
+      if (u) {
+        if (store.pendingGlobalLineOps.length) {
+          u.pendingLineOps = (u.pendingLineOps || []).concat(store.pendingGlobalLineOps);
+          for (const op of store.pendingGlobalLineOps) {
+            u.logs ||= {};
+            u.logs[op.date] ||= [];
+            if (op.type === 'add') u.logs[op.date].push(op.ml);
+            else if (op.type === 'undo') u.logs[op.date].pop();
+          }
+          store.pendingGlobalLineOps = [];
+        }
+        pendingLineOps = u.pendingLineOps || [];
+        u.pendingLineOps = [];
+        saveStore();
+      } else if (store.pendingGlobalLineOps.length) {
+        pendingLineOps = store.pendingGlobalLineOps.slice();
+        store.pendingGlobalLineOps = [];
+        saveStore();
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ ok: true, data: store.users[email] || null }));
+      return res.end(JSON.stringify({ ok: true, data: u, pendingLineOps }));
     }
     if (req.method === 'POST') {
       const body = await readJson(req);
       const email = (body.email || '').toLowerCase().trim();
+      let pendingLineOps = [];
       if (email && body.state) {
-        store.users[email] = Object.assign(store.users[email] || {}, body.state, {
+        const prev = store.users[email] || {};
+        pendingLineOps = (prev.pendingLineOps || []).concat(store.pendingGlobalLineOps || []);
+        store.pendingGlobalLineOps = [];
+        const mergedState = Object.assign({}, body.state);
+        if (pendingLineOps.length) {
+          mergedState.logs = Object.assign({}, body.state.logs || {});
+          for (const op of pendingLineOps) {
+            mergedState.logs[op.date] = (mergedState.logs[op.date] || []).slice();
+            if (op.type === 'add') mergedState.logs[op.date].push(op.ml);
+            else if (op.type === 'undo') mergedState.logs[op.date].pop();
+          }
+        }
+        store.users[email] = Object.assign(prev, mergedState, {
           email,
-          name: body.name || store.users[email]?.name || email.split('@')[0],
+          name: body.name || prev.name || email.split('@')[0],
+          pendingLineOps: [],
           updatedAt: Date.now()
         });
         saveStore();
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ ok: true }));
+      return res.end(JSON.stringify({ ok: true, pendingLineOps }));
     }
   }
 
@@ -859,10 +895,16 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
           const addMl = Math.round(+mAdd[1]);
           let newTotal = addMl, goal = 2000, glass = 250, customMsg = '', extraStats = null;
           const targets = resolveTargetUsers(uid);
+          if (!targets.length) {
+            store.pendingGlobalLineOps ||= [];
+            store.pendingGlobalLineOps.push({ type: 'add', ml: addMl, date: d });
+          }
           for (const [, u] of targets) {
             u.logs ||= {};
             u.logs[d] ||= [];
             u.logs[d].push(addMl);
+            u.pendingLineOps ||= [];
+            u.pendingLineOps.push({ type: 'add', ml: addMl, date: d });
             newTotal = u.logs[d].reduce((a, b) => a + b, 0);
             goal = u.goal || 2000;
             glass = u.rem?.glass || 250;
@@ -896,9 +938,17 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
         } else if (/^(ยกเลิก|ลบแก้วล่าสุด|undo)$/i.test(txt)) {
           let removed = 0, newTotal = 0, goal = 2000, glass = 250, extraStats = null;
           const targets = resolveTargetUsers(uid);
+          if (!targets.length) {
+            store.pendingGlobalLineOps ||= [];
+            store.pendingGlobalLineOps.push({ type: 'undo', date: d });
+          }
           for (const [, u] of targets) {
             const arr = u.logs?.[d] || [];
-            if (arr.length) removed = arr.pop();
+            if (arr.length) {
+              removed = arr.pop();
+              u.pendingLineOps ||= [];
+              u.pendingLineOps.push({ type: 'undo', removed, date: d });
+            }
             newTotal = arr.reduce((a, b) => a + b, 0);
             goal = u.goal || 2000;
             glass = u.rem?.glass || 250;

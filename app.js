@@ -19,6 +19,8 @@
           name: state.user.name || state.user.email.split('@')[0],
           state: { profile: state.profile, goal: state.goal, logs: state.logs, rem: state.rem }
         })
+      }).then(r => r.json()).then(d => {
+        if (d?.pendingLineOps?.length) applyPendingLineOps(d.pendingLineOps);
       }).catch(() => {});
     }
   };
@@ -1239,7 +1241,69 @@
     catNav.style.setProperty('--tab-count', isAdmin ? 5 : 4);
     if (!isAdmin && curTab === 4) switchTab(0);
     applyStateToUI();
+    syncUserFromServer();
   }
+
+  function applyPendingLineOps(ops) {
+    if (!Array.isArray(ops) || !ops.length) return;
+    let addedMl = 0, undoneCount = 0;
+    const before = total();
+    for (const op of ops) {
+      const dt = op.date || today();
+      state.logs[dt] ||= [];
+      if (op.type === 'add' && op.ml > 0) {
+        state.logs[dt].push(op.ml);
+        if (dt === today()) addedMl += op.ml;
+      } else if (op.type === 'undo') {
+        if (state.logs[dt].length) {
+          state.logs[dt].pop();
+          if (dt === today()) undoneCount++;
+        }
+      }
+    }
+    localStorage.setItem(KEY, JSON.stringify(state));
+    const after = total();
+    if (addedMl > 0) {
+      dropInto(Math.min(before / state.goal, 1), Math.min(after / state.goal, 1), addedMl, () => {
+        render();
+        replay($('ml'), 'pop');
+      });
+      toast(`💧 ซิงก์จาก LINE +${addedMl} มล. แล้ว!`);
+    } else if (undoneCount > 0) {
+      pluck(Math.floor(N / 2), -8, 6);
+      sloshVel -= 0.16;
+      render();
+      toast('↩️ ซิงก์การยกเลิกจาก LINE แล้ว');
+    } else {
+      render();
+    }
+  }
+
+  let syncingUser = false;
+  async function syncUserFromServer() {
+    if (!state.user?.email || syncingUser) return;
+    syncingUser = true;
+    try {
+      const res = await fetch(`/api/user-state?email=${encodeURIComponent(state.user.email)}`);
+      if (res.ok) {
+        const { data, pendingLineOps } = await res.json();
+        if (!data) {
+          // Server restarted or doesn't have our user record yet -> push local state
+          save();
+        } else if (Array.isArray(pendingLineOps) && pendingLineOps.length) {
+          applyPendingLineOps(pendingLineOps);
+        }
+      }
+    } catch (_) {}
+    syncingUser = false;
+  }
+  setInterval(() => {
+    if (!document.hidden) syncUserFromServer();
+  }, 3000);
+  window.addEventListener('focus', syncUserFromServer);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) syncUserFromServer();
+  });
 
   $('gmailForm').onsubmit = e => {
     e.preventDefault();
