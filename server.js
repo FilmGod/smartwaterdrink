@@ -339,10 +339,18 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       publicKey: store.vapidKeys.publicKey,
-      googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+      googleClientId: store.googleClientId || process.env.GOOGLE_CLIENT_ID || '',
       hasDefaultLineToken: !!store.defaultLineToken,
       lineBotInfo: store.lineBotInfo || null
     }));
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/google-config') {
+    const body = await readJson(req);
+    store.googleClientId = (body.googleClientId || '').trim();
+    saveStore();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true, googleClientId: store.googleClientId }));
   }
 
   if (url.pathname === '/api/user-state') {

@@ -824,12 +824,32 @@
   function renderSavedAccounts() {
     const list = getSavedAccounts();
     const box = $('savedAccounts');
+    const modalList = $('modalAccountList');
+    if (modalList) {
+      if (list.length) {
+        modalList.innerHTML = list.map(a => {
+          const disp = a.name || a.email.split('@')[0];
+          const init = (disp[0] || 'G').toUpperCase();
+          return `
+            <button type="button" class="g-acc-row" data-email="${a.email}" data-name="${a.name || ''}">
+              <span class="g-acc-ava">${init}</span>
+              <div><strong>${disp}</strong><small>${a.email}</small></div>
+            </button>
+          `;
+        }).join('');
+        modalList.querySelectorAll('.g-acc-row').forEach(btn => {
+          btn.onclick = () => loginWithGmail(btn.dataset.email, btn.dataset.name);
+        });
+      } else {
+        modalList.innerHTML = '';
+      }
+    }
     if (!list.length) {
       box.hidden = true;
       return;
     }
     box.hidden = false;
-    box.innerHTML = `<p class="muted">บัญชีที่เคยเข้าใช้ในเครื่องนี้</p>` + list.map(a => `
+    box.innerHTML = `<p class="muted">บัญชี Google ที่เคยเข้าใช้ในเครื่องนี้</p>` + list.map(a => `
       <button type="button" class="acc-chip" data-email="${a.email}" data-name="${a.name || ''}">
         <div><strong>${a.name || a.email.split('@')[0]}</strong><small>${a.email}</small></div>
         <span>เข้าใช้ →</span>
@@ -872,6 +892,7 @@
       return;
     }
     err.textContent = '';
+    if ($('googleModal')) $('googleModal').hidden = true;
     const name = (rawName || '').trim() || email.split('@')[0];
     state.user = { email, name };
     rememberAccount(state.user);
@@ -915,6 +936,25 @@
     loginWithGmail($('gmailInput').value, $('gmailName').value);
   };
 
+  function openGoogleModal() {
+    renderSavedAccounts();
+    if ($('googleModal')) {
+      $('googleModal').hidden = false;
+      setTimeout(() => $('gmailInput')?.focus(), 50);
+    }
+  }
+  function closeGoogleModal() {
+    if ($('googleModal')) $('googleModal').hidden = true;
+  }
+  if ($('openGooglePopupBtn')) $('openGooglePopupBtn').onclick = openGoogleModal;
+  if ($('closeGoogleModal')) $('closeGoogleModal').onclick = closeGoogleModal;
+  if ($('cancelGoogleModal')) $('cancelGoogleModal').onclick = closeGoogleModal;
+  if ($('googleModal')) {
+    $('googleModal').onclick = e => {
+      if (e.target === $('googleModal')) closeGoogleModal();
+    };
+  }
+
   $('logoutBtn').onclick = () => {
     state.user = null;
     localStorage.setItem(KEY, JSON.stringify(state));
@@ -926,19 +966,31 @@
   fetch('/api/vapid-public-key').then(r => r.json()).then(({ googleClientId, hasDefaultLineToken, lineBotInfo }) => {
     if (hasDefaultLineToken) serverHasLineToken = true;
     if (lineBotInfo) renderLineBotBanner(lineBotInfo);
-    if (googleClientId && window.google?.accounts?.id) {
-      window.google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: resp => {
-          try {
-            const payload = JSON.parse(atob(resp.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-            if (payload.email) loginWithGmail(payload.email, payload.name || '');
-          } catch (_) {}
-        }
-      });
-      const wrap = $('gBtnWrap');
-      wrap.hidden = false;
-      window.google.accounts.id.renderButton(wrap, { theme: 'outline', size: 'large', shape: 'pill' });
+    if (googleClientId) {
+      const initGis = () => {
+        if (!window.google?.accounts?.id) return;
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: resp => {
+            try {
+              const payload = JSON.parse(atob(resp.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+              if (payload.email) loginWithGmail(payload.email, payload.name || '');
+            } catch (_) {}
+          }
+        });
+        const wrap = $('gBtnWrap');
+        wrap.hidden = false;
+        window.google.accounts.id.renderButton(wrap, { theme: 'outline', size: 'large', shape: 'pill' });
+      };
+      if (window.google?.accounts?.id) {
+        initGis();
+      } else {
+        const s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.async = true;
+        s.onload = initGis;
+        document.head.appendChild(s);
+      }
     }
   }).catch(() => {});
 
