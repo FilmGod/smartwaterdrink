@@ -48,12 +48,13 @@ const mins = s => { const [h, m] = (s || '07:00').split(':').map(Number); return
 
 function computeSlots(rem, goal) {
   const w = mins(rem.wake), rawS = mins(rem.sleep);
-  const s = rawS <= w ? rawS + 1440 : rawS;
+  // Clamp end-of-day midnight (00:00 -> 1440) to 1439 (23:59) so the final slot never wraps to 00:00 AM (0)
+  const s = rawS <= w ? Math.min(1439, rawS + 1440) : rawS;
   const glass = Math.max(100, +rem.glass || 250);
   const n = Math.max(1, Math.ceil(goal / glass));
   return Array.from({ length: n }, (_, i) => ({
     i,
-    at: Math.round(w + (s - w) * (i + 1) / n) % 1440,
+    at: Math.min(1439, Math.round(w + (s - w) * (i + 1) / n)),
     expected: Math.min(goal, goal * (i + 1) / n)
   }));
 }
@@ -426,12 +427,40 @@ async function sendLineMessage({ token, userId, text, glass = 250, consumed = 0,
 }
 
 // Background scheduler & Cron endpoint handler
+function getEffectiveSleepMin(rem) {
+  const w = mins(rem?.wake || '07:00');
+  const rawS = mins(rem?.sleep || '22:00');
+  return rawS <= w ? Math.min(1435, rawS + 1440) : rawS;
+}
+
+function getScheduleSig(rem, goal) {
+  return `${rem?.wake || '07:00'}|${rem?.sleep || '22:00'}|${rem?.glass || 250}|${goal || 2000}`;
+}
+
+function ensureUserFiredInit(u, d, cur) {
+  const goal = u.goal || 2000;
+  const sig = getScheduleSig(u.rem, goal);
+  u.firedByDay ||= {};
+  if (u.firedDay !== d || u.firedSig !== sig || !Array.isArray(u.firedByDay[d])) {
+    const list = computeSlots(u.rem || {}, goal);
+    // Pre-mark slots that are already in the past (< cur) so old morning slots don't fire when editing schedule,
+    // while keeping slots at === cur or in the future (> cur) ready to fire on time.
+    u.firedByDay[d] = list.filter(s => s.at < cur).map(s => s.at);
+    u.firedDay = d;
+    u.firedSig = sig;
+    saveStore();
+  }
+  return u.firedByDay[d];
+}
+
 function checkReminders() {
   const d = todayStr(), cur = nowMin();
   let checked = 0;
-  // 1) Web Push & client-synced reminders
+  const hasUsers = Object.keys(store.users || {}).length > 0;
+
+  // 1) Web Push & legacy client-synced reminders
   for (const [id, c] of Object.entries(store.clients)) {
-    if (!c.rem?.on && !c.rem?.lineOn) continue;
+    if (!c.rem?.on && (hasUsers || !c.rem?.lineOn)) continue;
     checked++;
     if (c.day !== d) {
       c.day = d;
@@ -442,10 +471,10 @@ function checkReminders() {
     if (c.snoozeUntil && cur < c.snoozeUntil) continue;
     const goal = c.goal || 2000;
     const glass = c.rem.glass || 250;
-    const sleepMin = mins(c.rem.sleep || '22:00');
+    const sleepMin = getEffectiveSleepMin(c.rem);
 
     // Nightly Summary Report at sleep time
-    if (c.rem?.lineOn && c.rem?.nightSummaryOn !== false && cur >= sleepMin && c.nightSummaryDate !== d) {
+    if (!hasUsers && c.rem?.lineOn && c.rem?.nightSummaryOn !== false && cur >= sleepMin && c.nightSummaryDate !== d) {
       c.nightSummaryDate = d;
       saveStore();
       sendLineMessage({
@@ -462,12 +491,12 @@ function checkReminders() {
 
     const list = computeSlots(c.rem, goal);
     c.fired ||= [];
-    const due = list.filter(s => s.at <= cur && !c.fired.includes(s.i));
+    const due = list.filter(s => s.at <= cur && !c.fired.includes(s.at));
     if (!due.length) continue;
-    due.forEach(s => c.fired.push(s.i));
+    due.forEach(s => c.fired.push(s.at));
     const last = due[due.length - 1];
     saveStore();
-    if ((c.consumed || 0) < last.expected - glass / 2 && (c.consumed || 0) < goal) {
+    if ((c.consumed || 0) < goal) {
       const left = Math.max(0, goal - (c.consumed || 0));
       const msgText = pickReminderMessage(c.rem, last.i);
       const behindMuch = last.expected - (c.consumed || 0) >= glass * 1.5;
@@ -479,7 +508,7 @@ function checkReminders() {
           clientId: id
         });
       }
-      if (c.rem?.lineOn && (c.rem?.lineToken || store.defaultLineToken)) {
+      if (!hasUsers && c.rem?.lineOn && (c.rem?.lineToken || store.defaultLineToken)) {
         sendLineMessage({
           token: c.rem.lineToken || store.defaultLineToken,
           userId: c.rem.lineUserId,
@@ -493,20 +522,20 @@ function checkReminders() {
       }
     }
   }
-  // 2) User-synced LINE reminders (for users who enabled LINE without Web Push subscription)
+
+  // 2) User-synced LINE reminders (Primary source for all logged-in accounts)
   for (const [email, u] of Object.entries(store.users || {})) {
-    if (!u.rem?.lineOn || (!u.rem?.lineToken && !store.defaultLineToken)) continue;
+    u.rem ||= { on: false, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 };
+    if (u.rem.lineOn === false || (!u.rem?.lineToken && !store.defaultLineToken)) continue;
     checked++;
     const tok = u.rem.lineToken || store.defaultLineToken;
-    const covered = Object.values(store.clients).some(c => c.rem?.lineOn && (c.rem?.lineToken || store.defaultLineToken) === tok && c.rem?.lineUserId === u.rem?.lineUserId);
-    if (covered) continue;
     if (u.snoozeDay === d && u.snoozeUntil && cur < u.snoozeUntil) continue;
-    u.firedByDay ||= {};
-    const fired = (u.firedByDay[d] ||= []);
+
+    const fired = ensureUserFiredInit(u, d, cur);
     const goal = u.goal || 2000;
     const glass = u.rem.glass || 250;
     const consumed = (u.logs?.[d] || []).reduce((a, b) => a + b, 0);
-    const sleepMin = mins(u.rem.sleep || '22:00');
+    const sleepMin = getEffectiveSleepMin(u.rem);
 
     // Nightly Summary Report at sleep time
     if (u.rem?.nightSummaryOn !== false && cur >= sleepMin && u.nightSummaryDate !== d) {
@@ -526,12 +555,12 @@ function checkReminders() {
     }
 
     const list = computeSlots(u.rem, goal);
-    const due = list.filter(s => s.at <= cur && !fired.includes(s.i));
+    const due = list.filter(s => s.at <= cur && !fired.includes(s.at));
     if (!due.length) continue;
-    due.forEach(s => fired.push(s.i));
+    due.forEach(s => fired.push(s.at));
     const last = due[due.length - 1];
     saveStore();
-    if (consumed < last.expected - glass / 2 && consumed < goal) {
+    if (consumed < goal) {
       const behindMuch = last.expected - consumed >= glass * 1.5;
       sendLineMessage({
         token: tok,
@@ -548,7 +577,13 @@ function checkReminders() {
   }
   return checked;
 }
-setInterval(checkReminders, 30000);
+setInterval(checkReminders, 15000);
+
+// Self-ping keep-alive every 10 minutes so Render free instance never spins down
+const EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL || 'https://smartwaterdrink.onrender.com';
+setInterval(() => {
+  fetch(`${EXTERNAL_URL}/healthz`).catch(() => {});
+}, 10 * 60 * 1000);
 
 function readJson(req) {
   return new Promise(resolve => {
@@ -604,6 +639,7 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
       let linkedLineUserId = '';
       if (u) {
         u.rem ||= { on: false, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 };
+        if (u.rem.lineOn === undefined) u.rem.lineOn = true;
         if (!u.rem.lineUserId) {
           const foundUid = Object.keys(store.lineLinks).find(k => store.lineLinks[k] === email);
           if (foundUid) u.rem.lineUserId = foundUid;
@@ -626,6 +662,7 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
         pendingLineOps = u.pendingLineOps || [];
         u.pendingLineOps = [];
         saveStore();
+        checkReminders();
       } else if (store.pendingGlobalLineOps.length) {
         pendingLineOps = store.pendingGlobalLineOps.slice();
         store.pendingGlobalLineOps = [];
@@ -648,6 +685,7 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
         store.pendingGlobalLineOps = [];
         const mergedState = Object.assign({}, body.state);
         mergedState.rem = Object.assign({}, prev.rem || {}, body.state.rem || {});
+        if (mergedState.rem.lineOn === undefined) mergedState.rem.lineOn = true;
         if (prevLineUid && !mergedState.rem.lineUserId) {
           mergedState.rem.lineUserId = prevLineUid;
         }
@@ -666,7 +704,9 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
           pendingLineOps: [],
           updatedAt: Date.now()
         });
+        ensureUserFiredInit(store.users[email], todayStr(), nowMin());
         saveStore();
+        checkReminders();
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, pendingLineOps, linkedLineUserId }));

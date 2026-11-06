@@ -1,4 +1,4 @@
-const C = 'swd-v23', FILES = ['./', 'index.html', 'styles.css?v=23', 'app.js?v=23', 'icon.svg'];
+const C = 'swd-v24', FILES = ['./', 'index.html', 'styles.css?v=24', 'app.js?v=24', 'icon.svg'];
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c => c.addAll(FILES)));

@@ -6,8 +6,9 @@
 
   const state = Object.assign({
     user: null, profile: null, goal: 2000, logs: {}, fired: {},
-    rem: { on: false, wake: '07:00', sleep: '22:00', glass: 250 }
+    rem: { on: false, lineOn: true, nightSummaryOn: true, wake: '07:00', sleep: '22:00', glass: 250 }
   }, JSON.parse(localStorage.getItem(KEY) || '{}'));
+  if (state.rem && state.rem.lineOn === undefined) state.rem.lineOn = true;
   const save = () => {
     localStorage.setItem(KEY, JSON.stringify(state));
     if (state.user?.email) {
@@ -782,15 +783,17 @@
 
   function slots() {
     const { wake, sleep, glass } = state.rem;
-    const w = mins(wake); let s = mins(sleep); if (s <= w) s += 1440;
-    const n = Math.max(1, Math.ceil(state.goal / glass));
+    const w = mins(wake), rawS = mins(sleep);
+    const s = rawS <= w ? Math.min(1439, rawS + 1440) : rawS;
+    const n = Math.max(1, Math.ceil(state.goal / Math.max(100, +glass || 250)));
     return Array.from({ length: n }, (_, i) => ({
-      at: Math.round(w + (s - w) * (i + 1) / n) % 1440,
+      at: Math.min(1439, Math.round(w + (s - w) * (i + 1) / n)),
       expected: Math.min(state.goal, state.goal * (i + 1) / n)
     }));
   }
   function expectedNow() {
-    const w = mins(state.rem.wake), s = mins(state.rem.sleep), cur = nowMin();
+    const w = mins(state.rem.wake), rawS = mins(state.rem.sleep), cur = nowMin();
+    const s = rawS <= w ? Math.min(1439, rawS + 1440) : rawS;
     if (s <= w || cur <= w) return 0;
     return state.goal * Math.min(1, (cur - w) / (s - w));
   }
@@ -820,19 +823,9 @@
 
   function tick() {
     render();
-    if (!state.rem.on || !state.profile) return;
-    const d = today(), cur = nowMin();
-    const fired = (state.fired[d] ||= []);
-    const due = slots().map((s, i) => ({ ...s, i })).filter(s => s.at <= cur && !fired.includes(s.i));
-    if (!due.length) return;
-    due.forEach(s => fired.push(s.i));
-    const last = due[due.length - 1];
-    save();
-    if (total() < last.expected - state.rem.glass / 2 && total() < state.goal) {
-      notify(`${messages[last.i % messages.length]} (เหลือ ${state.goal - total()} มล.)`);
-    }
+    fetch('/api/cron').catch(() => {});
   }
-  setInterval(tick, 30000);
+  setInterval(tick, 15000);
 
   /* ---------- Web Push & Calendar (.ics) ---------- */
   function b64ToUint8(base64String) {
@@ -929,26 +922,39 @@
     };
   }
 
-  $('remForm').onsubmit = async e => {
-    e.preventDefault();
+  function syncRemInputsToState(showToast = false) {
     Object.assign(state.rem, {
       on: false,
-      wake: $('wake').value,
-      sleep: $('sleep').value,
+      wake: $('wake').value || '07:00',
+      sleep: $('sleep').value || '22:00',
       glass: Math.max(100, +$('glass').value || 250),
       lineOn: $('lineOn').checked,
       nightSummaryOn: $('nightSummaryOn') ? $('nightSummaryOn').checked : true,
       tone: $('remTone') ? $('remTone').value : 'health',
       customMsg: $('remCustomMsg') ? $('remCustomMsg').value.trim() : ''
     });
+    slotSig = '';
     save();
-    const msg = $('remMsg');
-    msg.textContent = state.rem.lineOn
-      ? 'บันทึกตารางเวลาและเปิดแจ้งเตือน LINE (@943raake) แล้ว'
-      : 'บันทึกการตั้งค่าแล้ว';
-    toast('บันทึกการตั้งค่าแจ้งเตือนแล้ว');
     render();
+    if (showToast) {
+      const msg = $('remMsg');
+      if (msg) {
+        msg.textContent = state.rem.lineOn
+          ? 'บันทึกตารางเวลาและเปิดแจ้งเตือน LINE (@943raake) แล้ว'
+          : 'บันทึกการตั้งค่าแล้ว';
+      }
+      toast('บันทึกการตั้งค่าแจ้งเตือนแล้ว');
+    }
+  }
+
+  $('remForm').onsubmit = async e => {
+    e.preventDefault();
+    syncRemInputsToState(true);
   };
+  ['wake', 'sleep', 'glass', 'lineOn', 'nightSummaryOn', 'remTone', 'remCustomMsg'].forEach(id => {
+    const el = $(id);
+    if (el) el.addEventListener('change', () => syncRemInputsToState(false));
+  });
 
   let serverHasLineToken = true;
   function renderLineBotBanner(info) {
