@@ -1105,11 +1105,15 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
       res.writeHead(404);
       return res.end('Not found');
     }
-    const ext = path.extname(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const isImg = ['.png', '.svg', '.ico', '.jpg', '.jpeg'].includes(ext);
     res.writeHead(200, {
       'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Cache-Control': 'no-cache'
+      'Content-Length': content.length,
+      'Cache-Control': isImg ? 'public, max-age=86400' : 'no-cache',
+      'Access-Control-Allow-Origin': '*'
     });
+    if (req.method === 'HEAD') return res.end();
     res.end(content);
   });
 });
