@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Water Drink – ดื่มน้ำให้พอดีกับร่างกายคุณ</title>
+<meta name="theme-color" content="#0F4C5C">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ==================== LANDING / GMAIL LOGIN VIEW ==================== -->
+<section id="landingView" class="landing">
+  <div class="landing-bg" aria-hidden="true">
+    <svg viewBox="0 0 1200 120" preserveAspectRatio="none"><path class="l-wave1" d="M0 60Q150 10 300 60T600 60T900 60T1200 60T1500 60T1800 60T2100 60T2400 60V120H0Z"/><path class="l-wave2" d="M0 72Q150 28 300 72T600 72T900 72T1200 72T1500 72T1800 72T2100 72T2400 72V120H0Z"/></svg>
+  </div>
+
+  <div class="landing-inner">
+    <div class="landing-pitch">
+      <div class="brand-badge">
+        <span class="drop-icon" aria-hidden="true"></span>
+        <span>Smart Water Drink</span>
+      </div>
+      <h1>ดื่มน้ำให้พอดีกับร่างกายคุณในทุกวัน</h1>
+      <p class="landing-sub">คำนวณปริมาณน้ำ BMI พลังงาน และสารอาหารรายวัน พร้อมระบบแจ้งเตือนอัจฉริยะที่เตือนได้แม้ปิดหน้าเว็บ และซิงก์ข้อมูลข้ามเครื่องผ่าน Gmail ของคุณ</p>
+
+      <ul class="feature-list">
+        <li>
+          <span class="f-dot">💧</span>
+          <div><strong>ขวดน้ำจำลองฟิสิกส์เรียลไทม์</strong><span>บันทึกปริมาณน้ำพร้อมแอนิเมชันคลื่นน้ำและสถิติ 7 วันย้อนหลัง</span></div>
+        </li>
+        <li>
+          <span class="f-dot">🔔</span>
+          <div><strong>แจ้งเตือนอัจฉริยะ (Web Push &amp; ปฏิทิน)</strong><span>เตือนเฉพาะตอนที่คุณดื่มช้ากว่าแผน เด้งแจ้งเตือนแม้ปิดแท็บเว็บ</span></div>
+        </li>
+        <li>
+          <span class="f-dot">⚖️</span>
+          <div><strong>คำนวณ BMI &amp; โภชนาการครบถ้วน</strong><span>คำนวณ BMR, TDEE, โปรตีน, คาร์บ, ไขมัน และน้ำตามน้ำหนักตัวจริง</span></div>
+        </li>
+      </ul>
+    </div>
+
+    <div class="login-card" role="region" aria-label="เข้าสู่ระบบด้วย Gmail">
+      <div class="google-head">
+        <svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        <div>
+          <h2>เข้าสู่ระบบด้วย Gmail</h2>
+          <p class="muted">ซิงก์ข้อมูลการดื่มน้ำและโภชนาการของคุณอัตโนมัติ</p>
+        </div>
+      </div>
+
+      <div id="savedAccounts" class="saved-accounts" hidden></div>
+      <div id="gBtnWrap" class="g-btn-wrap" hidden></div>
+
+      <form id="gmailForm" class="gmail-form">
+        <label>อีเมล หรือ ชื่อบัญชีของคุณ
+          <input type="text" id="gmailInput" required placeholder="เช่น yourname@domain.com หรือชื่อบัญชี" autocomplete="username">
+        </label>
+        <label>ชื่อที่ใช้แสดง
+          <input type="text" id="gmailName" placeholder="เช่น คุณต้นน้ำ (เว้นว่างได้)" autocomplete="name">
+        </label>
+        <button type="submit" class="google-btn">
+          <svg class="g-mini" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          <span>ดำเนินการต่อด้วย Gmail</span>
+        </button>
+        <p id="loginErr" class="login-err" aria-live="polite"></p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== MAIN APP VIEW (SLIDING CATEGORIES) ==================== -->
+<div id="appView" class="app-shell" hidden>
+  <header class="top">
+    <strong class="brand">Smart Water Drink</strong>
+
+    <nav class="cat-tabs" aria-label="หมวดหมู่หลัก" style="--tab-idx:0">
+      <span class="tab-pill" aria-hidden="true"></span>
+      <button type="button" class="tab-btn active" data-tab="0" aria-selected="true">💧 วันนี้</button>
+      <button type="button" class="tab-btn" data-tab="1" aria-selected="false">🔔 แจ้งเตือน</button>
+      <button type="button" class="tab-btn" data-tab="2" aria-selected="false">⚖️ ร่างกาย</button>
+    </nav>
+
+    <div class="user-bar">
+      <span id="userAvatar" class="avatar" aria-hidden="true">G</span>
+      <div class="user-meta">
+        <strong id="userName">ผู้ใช้</strong>
+        <small id="userEmail">user@gmail.com</small>
+      </div>
+      <button type="button" id="logoutBtn" class="logout-btn">ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <main class="viewport" id="viewport">
+    <div class="slides-track" id="slidesTrack" style="--tab-idx:0">
+
+      <!-- SLIDE 0: วันนี้ (Today) -->
+      <section class="slide-panel active" data-panel="0" aria-label="วันนี้">
+        <div class="panel-card hero">
+          <div class="bottle-wrap">
+            <svg class="bottle" viewBox="0 -70 200 490" role="img" aria-labelledby="bottleLabel">
+              <title id="bottleLabel">ขวดน้ำแสดงปริมาณที่ดื่มวันนี้</title>
+              <defs>
+                <clipPath id="clip">
+                  <path d="M72 10h56v34c0 14 38 30 38 70v268c0 18-12 30-30 30H64c-18 0-30-12-30-30V114c0-40 38-56 38-70z"/>
+                </clipPath>
+                <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#4FB8E8"/>
+                  <stop offset=".6" stop-color="#2E9BD6"/>
+                  <stop offset="1" stop-color="#1D6FA8"/>
+                </linearGradient>
+              </defs>
+              <path class="glass" d="M72 10h56v34c0 14 38 30 38 70v268c0 18-12 30-30 30H64c-18 0-30-12-30-30V114c0-40 38-56 38-70z"/>
+              <g clip-path="url(#clip)">
+                <rect id="stream" class="stream" x="97" y="-10" width="6" height="0" rx="3"/>
+                <g id="water" style="transform:translateY(410px)">
+                  <path id="waveBack" class="wave back" d="M20 0L180 0V500H20Z"/>
+                  <path id="waveMid" class="wave mid" d="M20 0L180 0V500H20Z"/>
+                  <path id="waveFront" class="wave front" d="M20 0L180 0V500H20Z"/>
+                  <path id="foamLine" class="foam-line" d="M20 0L180 0"/>
+                  <g class="bubbles" id="bubbles">
+                    <circle cx="62" cy="360" r="3.5" style="--d:5.2s;--w:0s"/>
+                    <circle cx="88" cy="380" r="2.2" style="--d:4.1s;--w:1.4s"/>
+                    <circle cx="112" cy="370" r="4.2" style="--d:6.3s;--w:.6s"/>
+                    <circle cx="134" cy="365" r="2.8" style="--d:4.7s;--w:2.6s"/>
+                    <circle cx="76" cy="385" r="2" style="--d:3.8s;--w:3.2s"/>
+                    <circle cx="122" cy="375" r="2.5" style="--d:5.4s;--w:4s"/>
+                  </g>
+                  <g id="splashes" class="splashes"></g>
+                  <ellipse id="ripple" class="ripple" cx="100" cy="2" rx="58" ry="6"/>
+                </g>
+              </g>
+              <path class="shine" d="M50 140c-4 70-4 160 0 230"/>
+              <path class="shine small" d="M58 120c-1 6-2 10-2 14"/>
+              <g class="ticks" id="ticks"></g>
+              <path id="drop" class="drop" d="M100 -62c9 13 13 20 13 27a13 13 0 0 1-26 0c0-7 4-14 13-27z"/>
+            </svg>
+          </div>
+
+          <div class="hero-text">
+            <p class="muted">ดื่มไปแล้ววันนี้</p>
+            <p class="big"><span id="ml">0</span><small> / <span id="goal">2000</span> มล.</small></p>
+            <p id="status" class="status" aria-live="polite">ตั้งค่าร่างกายในหมวด "ร่างกาย" เพื่อคำนวณเป้าหมายของคุณ</p>
+
+            <div class="add" role="group" aria-label="เพิ่มปริมาณน้ำ">
+              <button data-add="150">+150</button>
+              <button data-add="250" class="primary">+250 มล.</button>
+              <button data-add="500">+500</button>
+              <button id="undo" class="ghost">ย้อนกลับ</button>
+            </div>
+            <form id="custom" class="inline">
+              <label>ปริมาณอื่น (มล.) <input type="number" id="customMl" min="10" max="2000" step="10" placeholder="เช่น 330"></label>
+              <button>เพิ่ม</button>
+            </form>
+
+            <div class="week" aria-label="7 วันที่ผ่านมา">
+              <p class="muted">7 วันที่ผ่านมา</p>
+              <div id="weekBars" class="bars"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 1: แจ้งเตือน (Reminders) -->
+      <section class="slide-panel" data-panel="1" aria-label="แจ้งเตือน">
+        <div class="panel-card band tint">
+          <div class="col">
+            <h2>แจ้งเตือนให้ดื่มน้ำ</h2>
+            <p class="lead">กระจายเวลาเตือนตามเวลาที่คุณตื่นอยู่ และเตือนเฉพาะตอนที่ดื่มช้ากว่าแผน รองรับทั้ง <strong>Web Push</strong>, <strong>แชต LINE</strong> และ <strong>ปฏิทิน (.ics)</strong></p>
+            <div class="slots-box">
+              <p class="muted">ตารางเวลาเตือนวันนี้</p>
+              <ol id="slots" class="slots" aria-label="เวลาที่จะเตือน"></ol>
+            </div>
+
+            <div class="line-card">
+              <div class="line-head">
+                <span class="line-badge">LINE</span>
+                <strong>แจ้งเตือนผ่านแชต LINE (@943raake)</strong>
+              </div>
+              <div id="lineBotBanner" class="line-bot-banner">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;background:#e7faef;padding:.6rem .85rem;border-radius:10px;border:1px solid #06C755">
+                  <div><strong style="color:#058538">บอท: Smart Water Drink (@943raake)</strong><br><small class="muted">แอดเพื่อนเพื่อรับการ์ดแจ้งเตือนดื่มน้ำเข้า LINE</small></div>
+                  <a href="https://line.me/R/ti/p/%40943raake" target="_blank" rel="noopener" style="background:#06C755;color:#fff;text-decoration:none;padding:.4rem .85rem;border-radius:99px;font-weight:700;font-size:.86rem">+ เพิ่มเพื่อน LINE</a>
+                </div>
+              </div>
+              <label class="check"><input type="checkbox" id="lineOn" checked> เปิดส่งแจ้งเตือนเข้า LINE</label>
+              <div class="add">
+                <button type="button" id="testLineBtn" class="line-btn">ส่งทดสอบเข้า LINE ทันที</button>
+              </div>
+              <details class="line-help">
+                <summary>ตั้งค่าขั้นสูง (เปลี่ยน Token / ระบุ LINE User ID)</summary>
+                <div class="fields" style="margin-top:.6rem">
+                  <label>LINE Channel Access Token <small class="muted">(เชื่อมต่อกับ @943raake อัตโนมัติแล้ว เว้นว่างได้)</small>
+                    <input type="password" id="lineToken" placeholder="ใช้ Token ของเซิร์ฟเวอร์อัตโนมัติ" autocomplete="off">
+                  </label>
+                  <label>LINE User ID <small class="muted">(เว้นว่างได้ ระบบจะส่งเข้าเพื่อนทุกคนของบอท)</small>
+                    <input type="text" id="lineUserId" placeholder="เช่น U123456... (เว้นว่างได้)">
+                  </label>
+                  <p class="note">Webhook URL: <code id="webhookUrlText">/api/line-webhook</code></p>
+                </div>
+              </details>
+            </div>
+          </div>
+          <form id="remForm" class="col fields">
+            <div class="row2">
+              <label>เวลาตื่น <input type="time" id="wake" value="07:00"></label>
+              <label>เวลานอน <input type="time" id="sleep" value="22:00"></label>
+            </div>
+            <label>ขนาดแก้ว (มล.) <input type="number" id="glass" value="250" min="100" max="1000" step="50"></label>
+            <label class="check"><input type="checkbox" id="remOn"> เปิดการแจ้งเตือนเบื้องหลัง (Web Push)</label>
+            <button class="primary" type="submit">บันทึกการตั้งค่าแจ้งเตือนทั้งหมด</button>
+            <div class="add">
+              <button type="button" id="testPushBtn">ทดสอบ Web Push ใน 5 วิ</button>
+              <button type="button" id="icsBtn">ส่งออกเข้าปฏิทิน (.ics)</button>
+            </div>
+            <p id="remMsg" class="note" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+
+      <!-- SLIDE 2: ร่างกาย & โภชนาการ (Body & Nutrition) -->
+      <section class="slide-panel" data-panel="2" aria-label="ร่างกายและโภชนาการ">
+        <div class="panel-card body-grid">
+          <form id="bodyForm" class="body-form-box fields">
+            <div>
+              <h2>ข้อมูลร่างกาย</h2>
+              <p class="note">กรอกเพื่อคำนวณ BMI, พลังงาน, สารอาหาร และเป้าหมายน้ำต่อวัน</p>
+            </div>
+            <div class="row2">
+              <label>เพศ
+                <select id="sex"><option value="f">หญิง</option><option value="m">ชาย</option></select>
+              </label>
+              <label>อายุ (ปี) <input type="number" id="age" min="10" max="100" required value="30"></label>
+            </div>
+            <div class="row2">
+              <label>น้ำหนัก (กก.) <input type="number" id="weight" min="20" max="300" step="0.1" required value="60"></label>
+              <label>ส่วนสูง (ซม.) <input type="number" id="height" min="100" max="230" step="0.1" required value="165"></label>
+            </div>
+            <label>กิจกรรมในแต่ละวัน
+              <select id="activity">
+                <option value="1.2">นั่งทำงานเป็นหลัก แทบไม่ออกกำลังกาย</option>
+                <option value="1.375" selected>ออกกำลังกายเบา 1–3 วัน/สัปดาห์</option>
+                <option value="1.55">ออกกำลังกายปานกลาง 3–5 วัน/สัปดาห์</option>
+                <option value="1.725">ออกกำลังกายหนัก 6–7 วัน/สัปดาห์</option>
+                <option value="1.9">งานใช้แรงมาก หรือซ้อมวันละสองรอบ</option>
+              </select>
+            </label>
+            <label>เป้าหมาย
+              <select id="aim">
+                <option value="lose">ลดน้ำหนัก</option>
+                <option value="keep" selected>รักษาน้ำหนัก</option>
+                <option value="gain">เพิ่มน้ำหนัก/กล้ามเนื้อ</option>
+              </select>
+            </label>
+            <label class="check"><input type="checkbox" id="hot"> อยู่ในที่อากาศร้อนหรือเหงื่อออกมาก</label>
+            <button class="primary" type="submit">คำนวณและอัปเดตเป้าหมาย</button>
+          </form>
+
+          <div id="results" class="results-box">
+            <div class="bmi-header">
+              <div>
+                <p class="muted">ดัชนีมวลกาย (BMI)</p>
+                <p class="big bmi-num"><span id="bmiVal">–</span> <small id="bmiCat"></small></p>
+              </div>
+              <div class="bmi-scale-wrap">
+                <div class="scale" aria-hidden="true"><i id="bmiPin"></i></div>
+                <p class="note" id="bmiNote">กด "คำนวณและอัปเดตเป้าหมาย" เพื่อดูผลลัพธ์ของคุณ</p>
+              </div>
+            </div>
+
+            <dl class="facts">
+              <div><dt>น้ำที่ควรดื่มต่อวัน</dt><dd id="rWater">–</dd></div>
+              <div><dt>พลังงานพื้นฐาน (BMR)</dt><dd id="rBmr">–</dd></div>
+              <div><dt>พลังงานที่ใช้ต่อวัน (TDEE)</dt><dd id="rTdee">–</dd></div>
+              <div><dt>พลังงานที่ควรกินตามเป้าหมาย</dt><dd id="rKcal">–</dd></div>
+            </dl>
+
+            <h3>สารอาหารที่ควรได้รับต่อวัน</h3>
+            <table class="macros">
+              <thead><tr><th scope="col">สารอาหาร</th><th scope="col">ปริมาณ</th><th scope="col">ที่มา</th></tr></thead>
+              <tbody id="macroBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer>ข้อมูลซิงก์กับบัญชี Gmail ของคุณ และเก็บในเครื่องอย่างปลอดภัย</footer>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="fx" class="fx" aria-hidden="true"></div>
+<script src="app.js"></script>
+</body>
+</html>

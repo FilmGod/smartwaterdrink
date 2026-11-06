@@ -1,0 +1,17 @@
+{
+  "name": "smartwaterdrink",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "start": "node server.js",
+    "tunnel": "npx -y cloudflared tunnel --url http://localhost:5173"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}
