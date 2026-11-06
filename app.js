@@ -958,8 +958,9 @@
     loginWithGmail($('gmailInput').value, $('gmailName').value);
   };
 
+  const DEFAULT_GOOGLE_CLIENT_ID = '990715836668-68q2lvjmg79807hc12ltmk5rcat6560l.apps.googleusercontent.com';
   let googleTokenClient = null;
-  let activeGoogleClientId = localStorage.getItem('swd-gclient-id') || '';
+  let activeGoogleClientId = localStorage.getItem('swd-gclient-id') || DEFAULT_GOOGLE_CLIENT_ID;
 
   function setupGoogleOAuth(clientId) {
     if (!clientId) return;
@@ -996,16 +997,11 @@
             } catch (_) {}
           }
         });
-        const wrap = $('gBtnWrap');
-        if (wrap) {
-          wrap.hidden = false;
-          window.google.accounts.id.renderButton(wrap, { theme: 'outline', size: 'large', shape: 'pill' });
-        }
       }
     };
     if (window.google?.accounts) {
       initGis();
-    } else {
+    } else if (!document.querySelector('script[src*="accounts.google.com/gsi/client"]')) {
       const s = document.createElement('script');
       s.src = 'https://accounts.google.com/gsi/client';
       s.async = true;
@@ -1013,6 +1009,8 @@
       document.head.appendChild(s);
     }
   }
+
+  setupGoogleOAuth(activeGoogleClientId);
 
   function openGoogleModal() {
     if (googleTokenClient) {

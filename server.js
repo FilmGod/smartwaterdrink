@@ -335,11 +335,13 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true, date: todayStr(), timeMin: nowMin(), checked }));
   }
 
+const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-68q2lvjmg79807hc12ltmk5rcat6560l.apps.googleusercontent.com';
+
   if (req.method === 'GET' && url.pathname === '/api/vapid-public-key') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       publicKey: store.vapidKeys.publicKey,
-      googleClientId: store.googleClientId || process.env.GOOGLE_CLIENT_ID || '',
+      googleClientId: store.googleClientId || DEFAULT_GOOGLE_CLIENT_ID,
       hasDefaultLineToken: !!store.defaultLineToken,
       lineBotInfo: store.lineBotInfo || null
     }));
