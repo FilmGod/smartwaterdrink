@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=17">
 </head>
 <body>
 
@@ -135,13 +135,13 @@
   <header class="top">
     <strong class="brand">Smart Water Drink</strong>
 
-    <nav class="cat-tabs" aria-label="หมวดหมู่หลัก" style="--tab-idx:0;--tab-count:5">
+    <nav class="cat-tabs" aria-label="หมวดหมู่หลัก" style="--tab-idx:0;--tab-count:4">
       <span class="tab-pill" aria-hidden="true"></span>
-      <button type="button" class="tab-btn active" data-tab="0" aria-selected="true">💧 วันนี้</button>
-      <button type="button" class="tab-btn" data-tab="1" aria-selected="false">🔔 แจ้งเตือน</button>
-      <button type="button" class="tab-btn" data-tab="2" aria-selected="false">⚖️ ร่างกาย</button>
-      <button type="button" class="tab-btn" data-tab="3" aria-selected="false">📊 แดชบอร์ด</button>
-      <button type="button" class="tab-btn" data-tab="4" aria-selected="false">🛡️ แอดมิน</button>
+      <button type="button" class="tab-btn active" data-tab="0" aria-selected="true"><i class="t-ico">💧</i><span>วันนี้</span></button>
+      <button type="button" class="tab-btn" data-tab="1" aria-selected="false"><i class="t-ico">🔔</i><span>แจ้งเตือน</span></button>
+      <button type="button" class="tab-btn" data-tab="2" aria-selected="false"><i class="t-ico">⚖️</i><span>ร่างกาย</span></button>
+      <button type="button" class="tab-btn" data-tab="3" aria-selected="false"><i class="t-ico">📊</i><span>แดชบอร์ด</span></button>
+      <button type="button" class="tab-btn" data-tab="4" aria-selected="false" hidden><i class="t-ico">🛡️</i><span>แอดมิน</span></button>
     </nav>
 
     <div class="user-bar">
@@ -496,6 +496,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="fx" class="fx" aria-hidden="true"></div>
-<script src="app.js"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>
