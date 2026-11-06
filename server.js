@@ -217,8 +217,8 @@ function buildLineFlexMessage({ text, glass = 250, consumed = 0, goal = 2000, mo
       justifyContent: 'space-between',
       margin: 'md',
       contents: [
-        { type: 'text', text: `ดื่มแล้ว ${consumed} / ${goal} มล.`, size: 'sm', color: '#4d6a72', weight: 'bold' },
-        { type: 'text', text: `${pct}%`, size: 'sm', color: theme.barColor, weight: 'bold', align: 'end' }
+        { type: 'text', text: `ดื่มแล้ว ${consumed} / ${goal} มล.`, size: 'sm', color: '#4d6a72', weight: 'bold', flex: 4 },
+        { type: 'text', text: `${pct}%`, size: 'sm', color: theme.barColor, weight: 'bold', align: 'end', flex: 1 }
       ]
     },
     {
@@ -328,7 +328,7 @@ function buildLineFlexMessage({ text, glass = 250, consumed = 0, goal = 2000, mo
                 style: 'secondary',
                 height: 'sm',
                 flex: 1,
-                action: { type: 'message', label: '+150 มล.', text: '+150' }
+                action: { type: 'message', label: '+150', text: '+150' }
               },
               {
                 type: 'button',
@@ -336,14 +336,14 @@ function buildLineFlexMessage({ text, glass = 250, consumed = 0, goal = 2000, mo
                 color: theme.bg,
                 height: 'sm',
                 flex: 1,
-                action: { type: 'message', label: `+${glass} มล.`, text: `+${glass}` }
+                action: { type: 'message', label: `+${glass}`, text: `+${glass}` }
               },
               {
                 type: 'button',
                 style: 'secondary',
                 height: 'sm',
                 flex: 1,
-                action: { type: 'message', label: '+500 มล.', text: '+500' }
+                action: { type: 'message', label: '+500', text: '+500' }
               }
             ]
           },
@@ -357,7 +357,7 @@ function buildLineFlexMessage({ text, glass = 250, consumed = 0, goal = 2000, mo
                 style: 'link',
                 height: 'sm',
                 flex: 1,
-                action: { type: 'message', label: '⏰ เลื่อน 30 นาที', text: 'เลื่อน 30 นาที' }
+                action: { type: 'message', label: '⏰ เลื่อน 30น.', text: 'เลื่อน 30 นาที' }
               },
               {
                 type: 'button',
