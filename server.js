@@ -11,15 +11,33 @@ const DEFAULT_VAPID = {
   privateKey: process.env.VAPID_PRIVATE_KEY || ['mvy7X1DOsGl89bwLSyoSp5', 'qQr4kTAUAbtKHtHT53sG4'].join('')
 };
 
+function sanitizeStore(s) {
+  s.users ||= {};
+  s.lineLinks ||= {};
+  // Disconnect boomsiwat1669 from FilmXr01's LINE user ID
+  if (s.users['boomsiwat1669@gmail.com']?.rem?.lineUserId === 'Ue38075cfc9536aab575d8ab47ec0ecbb') {
+    delete s.users['boomsiwat1669@gmail.com'].rem.lineUserId;
+  }
+  // Explicitly link FilmXr01's LINE user ID to ponlasit3210@gmail.com
+  if (s.users['ponlasit3210@gmail.com']) {
+    s.users['ponlasit3210@gmail.com'].rem ||= { on: false, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 };
+    s.users['ponlasit3210@gmail.com'].rem.lineUserId = 'Ue38075cfc9536aab575d8ab47ec0ecbb';
+    s.lineLinks['Ue38075cfc9536aab575d8ab47ec0ecbb'] = 'ponlasit3210@gmail.com';
+  }
+  delete s.lastLineUserId;
+  delete s.pendingGlobalLineOps;
+  return s;
+}
+
 function loadStore() {
   try {
     const s = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
     s.vapidKeys ||= DEFAULT_VAPID;
-    return s;
+    return sanitizeStore(s);
   } catch (_) {
     const init = { vapidKeys: DEFAULT_VAPID, clients: {}, users: {} };
     try { fs.writeFileSync(STORE_PATH, JSON.stringify(init, null, 2)); } catch (_) {}
-    return init;
+    return sanitizeStore(init);
   }
 }
 
@@ -396,18 +414,25 @@ function calcUserStats(u, goal = 2000) {
   };
 }
 
-async function sendLineMessage({ token, userId, text, glass = 250, consumed = 0, goal = 2000, mode = 'auto', customMsg = '', extraStats = null }) {
+async function sendLineMessage({ token, userId, text, glass = 250, consumed = 0, goal = 2000, mode = 'auto', customMsg = '', extraStats = null, isBroadcast = false }) {
   const cleanToken = (token || store.defaultLineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
   if (!cleanToken) return { ok: false, error: 'กรุณาใส่ LINE Channel Access Token' };
-  const targetUser = (userId || store.lastLineUserId || '').trim();
+  const targetUser = (userId || '').trim();
+
+  // STRICT PRIVACY: For individual reminders/status, targetUser is strictly required!
+  // NEVER fall back to another user's ID and NEVER broadcast someone's data!
+  if (!isBroadcast && !targetUser) {
+    return { ok: false, error: 'ไม่มี LINE User ID สำหรับผู้ใช้นี้ (ยังไม่ได้ผูกบัญชี LINE)' };
+  }
+
   const flexBubble = buildLineFlexMessage({ text, glass, consumed, goal, mode, customMsg, extraStats });
 
-  const endpoint = targetUser
-    ? 'https://api.line.me/v2/bot/message/push'
-    : 'https://api.line.me/v2/bot/message/broadcast';
-  const body = targetUser
-    ? { to: targetUser, messages: [flexBubble] }
-    : { messages: [flexBubble] };
+  const endpoint = isBroadcast
+    ? 'https://api.line.me/v2/bot/message/broadcast'
+    : 'https://api.line.me/v2/bot/message/push';
+  const body = isBroadcast
+    ? { messages: [flexBubble] }
+    : { to: targetUser, messages: [flexBubble] };
 
   try {
     const resp = await fetch(endpoint, {
@@ -422,7 +447,7 @@ async function sendLineMessage({ token, userId, text, glass = 250, consumed = 0,
       const errJson = await resp.json().catch(() => ({}));
       return { ok: false, error: errJson.message || `LINE API ตอบกลับ ${resp.status}` };
     }
-    return { ok: true, mode: targetUser ? 'push' : 'broadcast' };
+    return { ok: true, mode: isBroadcast ? 'broadcast' : 'push' };
   } catch (e) {
     return { ok: false, error: e.message };
   }
@@ -462,7 +487,7 @@ function checkReminders() {
 
   // 1) Web Push & legacy client-synced reminders
   for (const [id, c] of Object.entries(store.clients)) {
-    if (!c.rem?.on && (hasUsers || !c.rem?.lineOn)) continue;
+    if (!c.rem?.on && (hasUsers || !c.rem?.lineOn || !c.rem?.lineUserId)) continue;
     checked++;
     if (c.day !== d) {
       c.day = d;
@@ -476,7 +501,7 @@ function checkReminders() {
     const sleepMin = getEffectiveSleepMin(c.rem);
 
     // Nightly Summary Report at sleep time
-    if (!hasUsers && c.rem?.lineOn && c.rem?.nightSummaryOn !== false && cur >= sleepMin && c.nightSummaryDate !== d) {
+    if (!hasUsers && c.rem?.lineOn && c.rem?.lineUserId && c.rem?.nightSummaryOn !== false && cur >= sleepMin && c.nightSummaryDate !== d) {
       c.nightSummaryDate = d;
       saveStore();
       sendLineMessage({
@@ -510,7 +535,7 @@ function checkReminders() {
           clientId: id
         });
       }
-      if (!hasUsers && c.rem?.lineOn && (c.rem?.lineToken || store.defaultLineToken)) {
+      if (!hasUsers && c.rem?.lineOn && c.rem?.lineUserId && (c.rem?.lineToken || store.defaultLineToken)) {
         sendLineMessage({
           token: c.rem.lineToken || store.defaultLineToken,
           userId: c.rem.lineUserId,
@@ -528,7 +553,8 @@ function checkReminders() {
   // 2) User-synced LINE reminders (Primary source for all logged-in accounts)
   for (const [email, u] of Object.entries(store.users || {})) {
     u.rem ||= { on: false, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 };
-    if (u.rem.lineOn === false || (!u.rem?.lineToken && !store.defaultLineToken)) continue;
+    // STRICT PRIVACY: Only send if this specific user has enabled LINE AND has their OWN valid lineUserId!
+    if (u.rem.lineOn === false || !u.rem.lineUserId || (!u.rem?.lineToken && !store.defaultLineToken)) continue;
     checked++;
     const tok = u.rem.lineToken || store.defaultLineToken;
     if (u.snoozeDay === d && u.snoozeUntil && cur < u.snoozeUntil) continue;
@@ -633,7 +659,6 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
   if (url.pathname === '/api/user-state') {
     store.users ||= {};
     store.lineLinks ||= {};
-    store.pendingGlobalLineOps ||= [];
     if (req.method === 'GET') {
       const email = (url.searchParams.get('email') || '').toLowerCase().trim();
       const u = store.users[email] || null;
@@ -642,33 +667,16 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
       if (u) {
         u.rem ||= { on: false, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 };
         if (u.rem.lineOn === undefined) u.rem.lineOn = true;
+        // Strictly find lineUserId that belongs to THIS email only!
         if (!u.rem.lineUserId) {
           const foundUid = Object.keys(store.lineLinks).find(k => store.lineLinks[k] === email);
           if (foundUid) u.rem.lineUserId = foundUid;
-          else if (store.lastLineUserId && Object.keys(store.users).length === 1) {
-            u.rem.lineUserId = store.lastLineUserId;
-            store.lineLinks[store.lastLineUserId] = email;
-          }
         }
         linkedLineUserId = u.rem.lineUserId || '';
-        if (store.pendingGlobalLineOps.length) {
-          u.pendingLineOps = (u.pendingLineOps || []).concat(store.pendingGlobalLineOps);
-          for (const op of store.pendingGlobalLineOps) {
-            u.logs ||= {};
-            u.logs[op.date] ||= [];
-            if (op.type === 'add') u.logs[op.date].push(op.ml);
-            else if (op.type === 'undo') u.logs[op.date].pop();
-          }
-          store.pendingGlobalLineOps = [];
-        }
         pendingLineOps = u.pendingLineOps || [];
         u.pendingLineOps = [];
         saveStore();
         checkReminders();
-      } else if (store.pendingGlobalLineOps.length) {
-        pendingLineOps = store.pendingGlobalLineOps.slice();
-        store.pendingGlobalLineOps = [];
-        saveStore();
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, data: u, pendingLineOps, linkedLineUserId }));
@@ -680,11 +688,10 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
       let linkedLineUserId = '';
       if (email && body.state) {
         const prev = store.users[email] || {};
+        // Strictly check lineUserId belonging to this email only!
         const prevLineUid = prev.rem?.lineUserId ||
-          Object.keys(store.lineLinks).find(k => store.lineLinks[k] === email) ||
-          (store.lastLineUserId && Object.keys(store.users).length <= 1 ? store.lastLineUserId : '') || '';
-        pendingLineOps = (prev.pendingLineOps || []).concat(store.pendingGlobalLineOps || []);
-        store.pendingGlobalLineOps = [];
+          Object.keys(store.lineLinks).find(k => store.lineLinks[k] === email) || '';
+        pendingLineOps = prev.pendingLineOps || [];
         const mergedState = Object.assign({}, body.state);
         mergedState.rem = Object.assign({}, prev.rem || {}, body.state.rem || {});
         if (mergedState.rem.lineOn === undefined) mergedState.rem.lineOn = true;
@@ -787,7 +794,8 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
       text: `📢 ประกาศ: ${text}`,
       glass: 250,
       consumed: 1000,
-      goal: 2000
+      goal: 2000,
+      isBroadcast: !data.lineUserId
     });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ ok: true, pushSent, lineOk: lineRes.ok }));
@@ -904,28 +912,21 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
     store.lineLinks ||= {};
 
     const resolveTargetUsers = uid => {
-      const linkedEmail = uid && store.lineLinks[uid];
+      if (!uid) return [];
+      const linkedEmail = store.lineLinks[uid];
       if (linkedEmail && store.users?.[linkedEmail]) {
         return [[linkedEmail, store.users[linkedEmail]]];
       }
       const byUid = Object.entries(store.users || {}).filter(([, u]) => u.rem?.lineUserId === uid);
       if (byUid.length) return byUid;
-      const byLineOn = Object.entries(store.users || {}).filter(([, u]) => u.rem?.lineOn);
-      if (byLineOn.length) return byLineOn;
-      return Object.entries(store.users || {});
+      return []; // STRICT PRIVACY: NEVER fall back to other users!
     };
 
     for (const ev of events) {
       const uid = ev.source?.userId;
-      if (uid) {
-        store.lastLineUserId = uid;
-        saveStore();
-      }
       if (ev.type === 'message' && ev.message?.type === 'text' && ev.replyToken) {
         const txt = ev.message.text.trim();
-        const anyUser = Object.values(store.users || {}).find(u => u.rem?.lineToken) ||
-                        Object.values(store.clients || {}).find(c => c.rem?.lineToken);
-        const token = store.defaultLineToken || anyUser?.rem?.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN;
+        const token = store.defaultLineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
         const mAdd = txt.match(/^\+?(\d{2,4})$/);
         const mEmail = txt.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
@@ -934,10 +935,22 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
         if (mEmail) {
           const email = mEmail[1].toLowerCase();
           store.users ||= {};
-          store.users[email] ||= { logs: {}, goal: 2000, rem: { on: true, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 } };
-          store.users[email].rem ||= { on: true, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 };
+          store.users[email] ||= { logs: {}, goal: 2000, rem: { on: false, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 } };
+          store.users[email].rem ||= { on: false, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 };
           store.users[email].rem.lineOn = true;
           if (uid) {
+            // Disassociate this uid from any other account
+            for (const otherEmail of Object.keys(store.users)) {
+              if (store.users[otherEmail].rem?.lineUserId === uid && otherEmail !== email) {
+                delete store.users[otherEmail].rem.lineUserId;
+              }
+            }
+            // Disassociate this email from any old uid
+            for (const oldUid of Object.keys(store.lineLinks)) {
+              if (store.lineLinks[oldUid] === email && oldUid !== uid) {
+                delete store.lineLinks[oldUid];
+              }
+            }
             store.users[email].rem.lineUserId = uid;
             store.lineLinks[uid] = email;
           }
@@ -946,7 +959,7 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
           const consumed = (u.logs?.[d] || []).reduce((a, b) => a + b, 0);
           const goal = u.goal || 2000;
           replyMessages = [buildLineFlexMessage({
-            text: `🔗 ผูกบัญชี LINE กับ ${email} สำเร็จแล้ว! กดปุ่มด้านล่างเพื่อบันทึกน้ำเข้าบัญชีของคุณได้ทันที`,
+            text: `🔗 ผูกบัญชี LINE กับ ${email} สำเร็จแล้ว! ข้อมูลการดื่มน้ำและแจ้งเตือนจะซิงก์เฉพาะบัญชีของคุณครับ`,
             glass: u.rem?.glass || 250,
             consumed,
             goal,
@@ -954,124 +967,101 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
             customMsg: u.rem?.customMsg || '',
             extraStats: calcUserStats(u, goal)
           })];
-        } else if (mAdd) {
-          const addMl = Math.round(+mAdd[1]);
-          let newTotal = addMl, goal = 2000, glass = 250, customMsg = '', extraStats = null;
+        } else {
           const targets = resolveTargetUsers(uid);
           if (!targets.length) {
-            store.pendingGlobalLineOps ||= [];
-            store.pendingGlobalLineOps.push({ type: 'add', ml: addMl, date: d });
-          }
-          for (const [, u] of targets) {
+            replyMessages = [{
+              type: 'text',
+              text: `👋 สวัสดีครับ! บัญชี LINE นี้ยังไม่ได้ผูกกับบัญชีผู้ใช้ในเว็บ Smart Water Drink\n\n📌 วิธีผูกบัญชี:\nพิมพ์ "อีเมลบัญชี Google ของคุณ" ลงในแชตนี้ (เช่น yourname@gmail.com)\n\nระบบจะซิงก์ข้อมูลการดื่มน้ำและแจ้งเตือนเข้าบัญชีของคุณทันทีครับ! 💧`,
+              quickReply: { items: QUICK_REPLY_ITEMS }
+            }];
+          } else if (mAdd) {
+            const addMl = Math.round(+mAdd[1]);
+            const [email, u] = targets[0];
             u.logs ||= {};
             u.logs[d] ||= [];
             u.logs[d].push(addMl);
             u.pendingLineOps ||= [];
             u.pendingLineOps.push({ type: 'add', ml: addMl, date: d });
-            newTotal = u.logs[d].reduce((a, b) => a + b, 0);
-            goal = u.goal || 2000;
-            glass = u.rem?.glass || 250;
-            customMsg = u.rem?.customMsg || '';
-            extraStats = calcUserStats(u, goal);
-          }
-          for (const c of Object.values(store.clients || {})) {
-            if (!uid || !c.rem?.lineUserId || c.rem.lineUserId === uid) {
-              c.consumed = (c.consumed || 0) + addMl;
-              c.pendingAdd ||= [];
-              c.pendingAdd.push(addMl);
-              if (!targets.length) {
-                newTotal = c.consumed;
-                goal = c.goal || 2000;
-              }
-            }
-          }
-          saveStore();
-          const hitGoal = newTotal >= goal;
-          replyMessages = [buildLineFlexMessage({
-            text: hitGoal
-              ? `🎉 บันทึกน้ำ +${addMl} มล. สำเร็จ! ยินดีด้วย วันนี้คุณดื่มครบเป้าหมายแล้ว!`
-              : `💧 บันทึกน้ำ +${addMl} มล. เรียบร้อยแล้ว! สู้ต่อไปอีกนิดนะครับ`,
-            glass,
-            consumed: newTotal,
-            goal,
-            mode: hitGoal ? 'celebrate' : 'auto',
-            customMsg,
-            extraStats
-          })];
-        } else if (/^(ยกเลิก|ลบแก้วล่าสุด|undo)$/i.test(txt)) {
-          let removed = 0, newTotal = 0, goal = 2000, glass = 250, extraStats = null;
-          const targets = resolveTargetUsers(uid);
-          if (!targets.length) {
-            store.pendingGlobalLineOps ||= [];
-            store.pendingGlobalLineOps.push({ type: 'undo', date: d });
-          }
-          for (const [, u] of targets) {
+            const newTotal = u.logs[d].reduce((a, b) => a + b, 0);
+            const goal = u.goal || 2000;
+            const glass = u.rem?.glass || 250;
+            const customMsg = u.rem?.customMsg || '';
+            const extraStats = calcUserStats(u, goal);
+            saveStore();
+            const hitGoal = newTotal >= goal;
+            replyMessages = [buildLineFlexMessage({
+              text: hitGoal
+                ? `🎉 บันทึกน้ำ +${addMl} มล. สำเร็จ! ยินดีด้วย วันนี้คุณดื่มครบเป้าหมายแล้ว!`
+                : `💧 บันทึกน้ำ +${addMl} มล. เรียบร้อยแล้ว! สู้ต่อไปอีกนิดนะครับ`,
+              glass,
+              consumed: newTotal,
+              goal,
+              mode: hitGoal ? 'celebrate' : 'auto',
+              customMsg,
+              extraStats
+            })];
+          } else if (/^(ยกเลิก|ลบแก้วล่าสุด|undo)$/i.test(txt)) {
+            const [email, u] = targets[0];
             const arr = u.logs?.[d] || [];
+            let removed = 0;
             if (arr.length) {
               removed = arr.pop();
               u.pendingLineOps ||= [];
               u.pendingLineOps.push({ type: 'undo', removed, date: d });
             }
-            newTotal = arr.reduce((a, b) => a + b, 0);
-            goal = u.goal || 2000;
-            glass = u.rem?.glass || 250;
-            extraStats = calcUserStats(u, goal);
+            const newTotal = arr.reduce((a, b) => a + b, 0);
+            const goal = u.goal || 2000;
+            const glass = u.rem?.glass || 250;
+            const extraStats = calcUserStats(u, goal);
+            saveStore();
+            replyMessages = [buildLineFlexMessage({
+              text: removed ? `↩️ ยกเลิกรายการล่าสุด (-${removed} มล.) เรียบร้อยแล้ว` : 'วันนี้ยังไม่มีรายการดื่มน้ำให้ยกเลิกครับ',
+              glass,
+              consumed: newTotal,
+              goal,
+              mode: 'auto',
+              extraStats
+            })];
+          } else if (/^(สรุป|สรุป 7 วัน|รายงาน)$/i.test(txt)) {
+            const [email, u] = targets[0];
+            const goal = u.goal || 2000;
+            const consumed = (u.logs?.[d] || []).reduce((a, b) => a + b, 0);
+            replyMessages = [buildLineFlexMessage({
+              text: `📊 สรุปสถิติการดื่มน้ำประจำวันที่ ${d} (${email})`,
+              glass: u.rem?.glass || 250,
+              consumed,
+              goal,
+              mode: 'summary',
+              customMsg: u.rem?.customMsg || '',
+              extraStats: calcUserStats(u, goal)
+            })];
+          } else if (/เลื่อน/.test(txt)) {
+            const snoozeUntil = nowMin() + 30;
+            for (const [, u] of targets) {
+              u.snoozeDay = d;
+              u.snoozeUntil = snoozeUntil;
+            }
+            saveStore();
+            replyMessages = [{
+              type: 'text',
+              text: '⏰ รับทราบครับ! เลื่อนการแจ้งเตือนออกไปอีก 30 นาที แล้วค่อยมาดื่มน้ำกันนะ 💧',
+              quickReply: { items: QUICK_REPLY_ITEMS }
+            }];
+          } else {
+            const [email, u] = targets[0];
+            const goal = u.goal || 2000;
+            const consumed = (u.logs?.[d] || []).reduce((a, b) => a + b, 0);
+            replyMessages = [buildLineFlexMessage({
+              text: `📊 สถานะวันนี้ของบัญชี ${email}`,
+              glass: u.rem?.glass || 250,
+              consumed,
+              goal,
+              mode: 'auto',
+              customMsg: u.rem?.customMsg || '',
+              extraStats: calcUserStats(u, goal)
+            })];
           }
-          saveStore();
-          replyMessages = [buildLineFlexMessage({
-            text: removed ? `↩️ ยกเลิกรายการล่าสุด (-${removed} มล.) เรียบร้อยแล้ว` : 'วันนี้ยังไม่มีรายการดื่มน้ำให้ยกเลิกครับ',
-            glass,
-            consumed: newTotal,
-            goal,
-            mode: 'auto',
-            extraStats
-          })];
-        } else if (/^(สรุป|สรุป 7 วัน|รายงาน)$/i.test(txt)) {
-          const targets = resolveTargetUsers(uid);
-          const [, u] = targets[0] || [null, null];
-          const goal = u?.goal || 2000;
-          const consumed = (u?.logs?.[d] || []).reduce((a, b) => a + b, 0);
-          replyMessages = [buildLineFlexMessage({
-            text: `📊 สรุปสถิติการดื่มน้ำของคุณประจำวันที่ ${d}`,
-            glass: u?.rem?.glass || 250,
-            consumed,
-            goal,
-            mode: 'summary',
-            customMsg: u?.rem?.customMsg || '',
-            extraStats: calcUserStats(u, goal)
-          })];
-        } else if (/เลื่อน/.test(txt)) {
-          const snoozeUntil = nowMin() + 30;
-          const targets = resolveTargetUsers(uid);
-          for (const [, u] of targets) {
-            u.snoozeDay = d;
-            u.snoozeUntil = snoozeUntil;
-          }
-          for (const c of Object.values(store.clients || {})) {
-            c.snoozeUntil = snoozeUntil;
-          }
-          saveStore();
-          replyMessages = [{
-            type: 'text',
-            text: '⏰ รับทราบครับ! เลื่อนการแจ้งเตือนออกไปอีก 30 นาที แล้วค่อยมาดื่มน้ำกันนะ 💧',
-            quickReply: { items: QUICK_REPLY_ITEMS }
-          }];
-        } else {
-          const targets = resolveTargetUsers(uid);
-          const [email, u] = targets[0] || [null, null];
-          const goal = u?.goal || 2000;
-          const consumed = (u?.logs?.[d] || []).reduce((a, b) => a + b, 0);
-          replyMessages = [buildLineFlexMessage({
-            text: email
-              ? `📊 สถานะวันนี้ของบัญชี ${email} (LINE ID: ${uid})`
-              : `👋 ยินดีต้อนรับสู่ Smart Water Drink!\nพิมพ์อีเมลของคุณในแชตนี้เพื่อผูกบัญชี หรือกดปุ่ม +มล. ด้านล่างได้เลย`,
-            glass: u?.rem?.glass || 250,
-            consumed,
-            goal,
-            mode: 'auto',
-            customMsg: u?.rem?.customMsg || '',
-            extraStats: u ? calcUserStats(u, goal) : null
-          })];
         }
 
         if (token && replyMessages.length) {
