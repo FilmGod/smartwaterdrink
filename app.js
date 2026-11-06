@@ -1715,8 +1715,115 @@
     }
   };
 
+  /* ---------- PWA Install App Prompt Modal ---------- */
+  let deferredInstallPrompt = null;
+  const installAppModal = $('installAppModal');
+  const installAppNowBtn = $('installAppNowBtn');
+  const closeInstallModalBtn = $('closeInstallModalBtn');
+  const closeInstallXBtn = $('closeInstallXBtn');
+  const installManualGuide = $('installManualGuide');
+  const topInstallBtn = $('topInstallBtn');
+
+  function isStandaloneApp() {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           window.navigator.standalone === true ||
+           document.referrer.includes('android-app://');
+  }
+
+  function buildManualInstallGuideHTML() {
+    const ua = navigator.userAgent || '';
+    const isLineApp = /Line\//i.test(ua);
+    const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isLineApp) {
+      return `<strong>💡 คุณกำลังเปิดผ่านแชต LINE:</strong>
+        <ol>
+          <li>กดปุ่ม <strong>⋮</strong> หรือปุ่มแชร์ที่มุมขวาล่าง/ขวาบนของจอ</li>
+          <li>เลือก <strong>"เปิดในเบราว์เซอร์เริ่มต้น" (Open in default browser)</strong></li>
+          <li>เมื่อเปิดใน Chrome หรือ Safari แล้ว กดปุ่ม <strong>"📲 ติดตั้งแอปลงโทรศัพท์"</strong> ได้ทันที!</li>
+        </ol>`;
+    }
+    if (isIOS) {
+      return `<strong>🍏 วิธีติดตั้งแอปบน iPhone / iPad:</strong>
+        <ol>
+          <li>กดปุ่ม <strong>แชร์ (Share ⬆️)</strong> ที่แถบเมนูด้านล่างของ Safari</li>
+          <li>เลื่อนลงมาแล้วเลือก <strong>"เพิ่มไปยังหน้าจอโฮม" (Add to Home Screen ➕)</strong></li>
+          <li>กด <strong>"เพิ่ม" (Add)</strong> ที่มุมขวาบน ไอคอนแอปจะอยู่บนหน้าจอมือถือทันที!</li>
+        </ol>`;
+    }
+    return `<strong>📲 วิธีติดตั้งลงหน้าจอมือถือใน 2 ขั้นตอน:</strong>
+      <ol>
+        <li>กดปุ่มเมนู <strong>⋮ (จุด 3 จุด มุมขวาบน)</strong> ของเบราว์เซอร์ Chrome</li>
+        <li>เลือก <strong>"ติดตั้งแอป" (Install app)</strong> หรือ <strong>"เพิ่มลงในหน้าจอหลัก"</strong> แล้วกดยืนยัน</li>
+      </ol>`;
+  }
+
+  function openInstallModal() {
+    if (!installAppModal || isStandaloneApp()) return;
+    if (installManualGuide) installManualGuide.hidden = true;
+    installAppModal.hidden = false;
+  }
+
+  function closeInstallModal() {
+    if (installAppModal) installAppModal.hidden = true;
+  }
+
+  function updateInstallUI() {
+    const standalone = isStandaloneApp();
+    if (topInstallBtn) topInstallBtn.hidden = standalone;
+    if (standalone && installAppModal) installAppModal.hidden = true;
+  }
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    updateInstallUI();
+    if (installAppNowBtn) {
+      installAppNowBtn.textContent = '📲 ติดตั้งแอปลงโทรศัพท์ทันที';
+    }
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    closeInstallModal();
+    if (topInstallBtn) topInstallBtn.hidden = true;
+    toast('🎉 ติดตั้งแอป Smart Water Drink ลงบนเครื่องเรียบร้อยแล้ว!');
+  });
+
+  if (installAppNowBtn) {
+    installAppNowBtn.onclick = async () => {
+      if (deferredInstallPrompt) {
+        try {
+          deferredInstallPrompt.prompt();
+          const { outcome } = await deferredInstallPrompt.userChoice;
+          if (outcome === 'accepted') {
+            deferredInstallPrompt = null;
+            closeInstallModal();
+            if (topInstallBtn) topInstallBtn.hidden = true;
+          }
+          return;
+        } catch (_) {}
+      }
+      if (installManualGuide) {
+        installManualGuide.innerHTML = buildManualInstallGuideHTML();
+        installManualGuide.hidden = false;
+      }
+    };
+  }
+  if (closeInstallModalBtn) closeInstallModalBtn.onclick = closeInstallModal;
+  if (closeInstallXBtn) closeInstallXBtn.onclick = closeInstallModal;
+  if (topInstallBtn) topInstallBtn.onclick = openInstallModal;
+  if (installAppModal) {
+    installAppModal.addEventListener('click', e => {
+      if (e.target === installAppModal) closeInstallModal();
+    });
+  }
+
   /* ---------- init ---------- */
   enterApp();
+  updateInstallUI();
+  if (!isStandaloneApp()) {
+    setTimeout(openInstallModal, 450);
+  }
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').then(() => syncPush());
     document.addEventListener('visibilitychange', () => {

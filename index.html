@@ -5,11 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Smart Water Drink – ดื่มน้ำให้พอดีกับร่างกายคุณ</title>
 <meta name="theme-color" content="#0F4C5C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="WaterDrink">
+<link rel="apple-touch-icon" href="icon.svg">
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=24">
+<link rel="stylesheet" href="styles.css?v=25">
 </head>
 <body>
 
@@ -145,6 +149,7 @@
     </nav>
 
     <div class="user-bar">
+      <button type="button" id="topInstallBtn" class="install-top-btn" hidden title="ติดตั้งแอปลงบนโทรศัพท์">📲 ติดตั้งแอป</button>
       <span id="userAvatar" class="avatar" aria-hidden="true">G</span>
       <div class="user-meta">
         <strong id="userName">ผู้ใช้</strong>
@@ -532,8 +537,34 @@
   <footer>ข้อมูลซิงก์กับบัญชี Gmail ของคุณ และเก็บในเครื่องอย่างปลอดภัย</footer>
 </div>
 
+<!-- ==================== INSTALL APP POPUP MODAL ==================== -->
+<div id="installAppModal" class="install-modal-backdrop" hidden>
+  <div class="install-modal" role="dialog" aria-modal="true" aria-labelledby="installModalTitle">
+    <button type="button" id="closeInstallXBtn" class="install-close-x" aria-label="ปิดหน้าต่าง">✕</button>
+    <div class="install-icon-wrap">
+      <img src="icon.svg" alt="Smart Water Drink Icon" class="install-app-icon">
+      <span class="install-badge-tag">ฟรี • ไม่เปลืองพื้นที่</span>
+    </div>
+    <h3 id="installModalTitle">📲 ติดตั้งแอป Smart Water Drink</h3>
+    <p class="install-lead">ติดตั้งลงบนหน้าจอโทรศัพท์ของคุณ เพื่อความสะดวกในการบันทึกน้ำและรับแจ้งเตือนได้ทุกวัน</p>
+
+    <ul class="install-perks">
+      <li><span>⚡</span> <div><strong>เข้าใช้งานได้ทันทีใน 1 แตะ</strong><small>เปิดจากไอคอนบนหน้าจอมือถือ ไม่ต้องเข้าผ่านเว็บเบราว์เซอร์</small></div></li>
+      <li><span>📱</span> <div><strong>แสดงผลเต็มจอ ลื่นไหลเหมือนแอปแท้</strong><small>รองรับฟิสิกส์เอียงขวดน้ำตามมือถือและเสียงเติมน้ำเต็มรูปแบบ</small></div></li>
+      <li><span>💬</span> <div><strong>ซิงก์กับ LINE (@943raake) อัตโนมัติ</strong><small>กดบวกน้ำจากแจ้งเตือน LINE แล้วอัปเดตเข้าแอปทันที</small></div></li>
+    </ul>
+
+    <div id="installManualGuide" class="install-guide-box" hidden></div>
+
+    <div class="install-actions">
+      <button type="button" id="installAppNowBtn" class="primary install-cta-btn">📲 ติดตั้งแอปลงโทรศัพท์</button>
+      <button type="button" id="closeInstallModalBtn" class="ghost install-later-btn">ไว้ทีหลัง (ใช้งานผ่านเว็บต่อ)</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="fx" class="fx" aria-hidden="true"></div>
-<script src="app.js?v=24"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>

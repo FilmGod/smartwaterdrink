@@ -285,6 +285,31 @@ label.check:has(#remOn),label.check:has(#lineOn),label.check:has(#nightSummaryOn
 
 footer{text-align:center;padding:1rem;font-size:.84rem;color:#4d6a72}
 
+/* ==================== INSTALL APP MODAL ==================== */
+.install-top-btn{padding:.28rem .7rem;font-size:.76rem;border-color:var(--water);background:linear-gradient(135deg,var(--water),#1D6FA8);color:#fff;border-width:1.5px;box-shadow:0 6px 14px -6px rgba(46,155,214,.65)}
+.install-top-btn:hover{background:#1D6FA8;color:#fff}
+.install-modal-backdrop{position:fixed;inset:0;background:rgba(11,42,51,.58);backdrop-filter:blur(6px);z-index:60;display:grid;place-items:center;padding:1rem;animation:enter .28s var(--ease-out)}
+.install-modal-backdrop[hidden]{display:none!important}
+.install-modal{position:relative;background:#fff;width:100%;max-width:410px;border-radius:24px;padding:1.5rem 1.35rem 1.25rem;box-shadow:0 24px 55px -16px rgba(11,42,51,.48);border:1.5px solid var(--line);text-align:center;animation:pop .42s var(--ease-spring)}
+.install-close-x{position:absolute;top:.75rem;right:.75rem;border:none;background:var(--foam);color:#4d6a72;width:32px;height:32px;padding:0;border-radius:50%;font-size:.9rem;display:grid;place-items:center}
+.install-close-x:hover{background:var(--spray);color:var(--lagoon)}
+.install-icon-wrap{display:flex;flex-direction:column;align-items:center;gap:.4rem;margin-bottom:.65rem}
+.install-app-icon{width:68px;height:68px;border-radius:18px;box-shadow:0 12px 24px -8px rgba(46,155,214,.55);background:var(--foam);padding:.3rem;border:2px solid #d5eef7}
+.install-badge-tag{display:inline-block;font-size:.72rem;font-weight:700;color:var(--lagoon);background:var(--tint);border:1px solid #bde3f2;padding:.12rem .65rem;border-radius:99px}
+.install-modal h3{margin:0 0 .35rem;font-size:1.25rem;color:var(--lagoon)}
+.install-lead{margin:0 0 .95rem;font-size:.88rem;color:#4d6a72;line-height:1.45}
+.install-perks{list-style:none;padding:0;margin:0 0 1rem;display:grid;gap:.55rem;text-align:left}
+.install-perks li{display:grid;grid-template-columns:32px 1fr;gap:.55rem;align-items:center;background:var(--foam);border:1px solid var(--line);border-radius:13px;padding:.5rem .7rem}
+.install-perks li span{font-size:1.15rem;text-align:center}
+.install-perks li strong{display:block;font-size:.85rem;color:var(--lagoon)}
+.install-perks li small{display:block;font-size:.76rem;color:#4d6a72;line-height:1.3}
+.install-guide-box{background:#eff9fd;border:1.5px solid var(--water);border-radius:14px;padding:.75rem .85rem;margin-bottom:.9rem;text-align:left;font-size:.83rem;color:var(--kelp);line-height:1.45}
+.install-guide-box strong{color:var(--lagoon)}
+.install-guide-box ol{margin:.4rem 0 0;padding-left:1.2rem;display:grid;gap:.25rem}
+.install-actions{display:grid;gap:.45rem}
+.install-cta-btn{width:100%;padding:.72rem 1rem;font-size:1rem;background:linear-gradient(135deg,var(--water),var(--lagoon));border-color:transparent;box-shadow:0 10px 24px -8px rgba(15,76,92,.65)}
+.install-later-btn{width:100%;font-size:.84rem;color:#4d6a72;padding:.35rem}
+
 /* ==================== TOAST & FX ==================== */
 .toast{position:fixed;left:50%;bottom:1.5rem;transform:translate(-50%,calc(100% + 2rem));opacity:0;visibility:hidden;background:var(--lagoon);color:#fff;padding:.65rem 1.25rem;border-radius:99px;box-shadow:0 12px 30px -10px rgba(15,76,92,.7);z-index:30;transition:transform .45s var(--ease-spring),opacity .3s,visibility .45s;pointer-events:none;white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis}
 .toast.show{transform:translate(-50%,0);opacity:1;visibility:visible}
