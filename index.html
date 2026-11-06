@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="styles.css?v=20">
 </head>
 <body>
 
@@ -250,9 +250,29 @@
                 </div>
               </div>
               <label class="check"><input type="checkbox" id="lineOn" checked> เปิดส่งแจ้งเตือนเข้า LINE</label>
-              <div class="add">
-                <button type="button" id="testLineBtn" class="line-btn">ส่งทดสอบเข้า LINE ทันที</button>
+              <label class="check"><input type="checkbox" id="nightSummaryOn" checked> ส่งการ์ดสรุปผลประจำวันอัตโนมัติก่อนนอน</label>
+
+              <div class="fields" style="margin-top:.2rem">
+                <label>สไตล์คำพูดแจ้งเตือนของบอท
+                  <select id="remTone">
+                    <option value="health">🩺 สายสุขภาพ (ข้อมูลดูแลร่างกาย)</option>
+                    <option value="cheer">💖 สายให้กำลังใจ (อบอุ่น อ่อนโยน)</option>
+                    <option value="fun">😎 สายฮา / กวนๆ (ขำๆ กระตุ้นให้ดื่ม)</option>
+                    <option value="strict">🔥 สายโค้ชฟิตเนส (เข้มข้น จริงจัง)</option>
+                  </select>
+                </label>
+                <label>ข้อความเตือนตัวเองท้ายการ์ด <small class="muted">(เว้นว่างได้)</small>
+                  <input type="text" id="remCustomMsg" placeholder="เช่น อย่าลืมกินวิตามินหลังดื่มน้ำนะ!">
+                </label>
               </div>
+
+              <div class="add">
+                <button type="button" id="testLineBtn" class="line-btn">💬 ส่งการ์ดเตือนเข้า LINE ทันที</button>
+                <button type="button" id="testSummaryLineBtn" class="line-btn">🌙 ทดสอบการ์ดสรุปก่อนนอน</button>
+              </div>
+              <p class="note" style="background:#f2fbf6;padding:.45rem .65rem;border-radius:8px;border:1px dashed #86efac">
+                💡 <strong>ผูกบัญชี LINE อัตโนมัติ:</strong> พิมพ์อีเมลของคุณลงในแชตบอท <strong>@943raake</strong> ครั้งเดียว เพื่อให้ปุ่มกดใน LINE (<code>+150</code>, <code>+250</code>, <code>+500</code>, <code>สถานะ</code>, <code>สรุป</code>, <code>ยกเลิก</code>) ซิงก์เข้าบัญชีของคุณโดยตรง!
+              </p>
               <details class="line-help">
                 <summary>ตั้งค่าขั้นสูง (เปลี่ยน Token / ระบุ LINE User ID)</summary>
                 <div class="fields" style="margin-top:.6rem">
@@ -499,6 +519,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="fx" class="fx" aria-hidden="true"></div>
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

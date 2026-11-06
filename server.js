@@ -58,12 +58,38 @@ function computeSlots(rem, goal) {
   }));
 }
 
-const MESSAGES = [
-  'ถึงเวลาจิบน้ำแล้ว สักแก้วนะ',
-  'ดื่มน้ำสักแก้ว แล้วค่อยกลับไปทำงานต่อ',
-  'ร่างกายกำลังรอน้ำอยู่ ลุกมาดื่มหน่อย',
-  'พักสายตาแล้วดื่มน้ำสักแก้ว'
-];
+const TONE_MESSAGES = {
+  health: [
+    'ถึงเวลาจิบน้ำแล้ว! น้ำช่วยลำเลียงออกซิเจนและทำให้สมองปลอดโปร่ง',
+    'ดื่มน้ำสักแก้วเพื่อรักษาสมดุลระบบเผาผลาญและความชุ่มชื้นของเซลล์นะครับ',
+    'การจิบน้ำสม่ำเสมอช่วยลดความเหนื่อยล้าและดูแลไตให้แข็งแรง',
+    'พักสายตาจากหน้าจอ แล้วเติมน้ำให้ร่างกายสักแก้วนะครับ'
+  ],
+  cheer: [
+    'คนเก่ง อย่าลืมแวะดื่มน้ำสักแก้วนะ ร่างกายจะได้สดชื่นทั้งวัน 💕',
+    'ทำงานเหนื่อยไหม? พักจิบน้ำเย็นๆ สักอึก เป็นห่วงสุขภาพนะครับ ✨',
+    'อีกนิดเดียวจะถึงเป้าหมายวันนี้แล้ว มาดื่มน้ำด้วยกันนะ สู้ๆ! 🌈',
+    'ดูแลงานแล้ว อย่าลืมดูแลตัวเองด้วยการดื่มน้ำสักแก้วนะครับ 🥰'
+  ],
+  fun: [
+    'เฮ้ย! เลือดข้นกว่าน้ำ แต่ถ้าไม่ดื่มน้ำ เลือดจะข้นเกินไปแล้วนะ! 😂',
+    'นั่งจ้องจอนานระวังตัวแห้งเป็นปลาหมึกตากแห้ง ลุกไปกินน้ำเดี๋ยวนี้! 🦑',
+    'น้ำเปล่าไม่ทำให้อ้วน แต่ถ้าไม่กินน้ำ ระวังผิวแห้งนะวัยรุ่น! 💦',
+    'บอทจับตาดูอยู่นะ... ยกแก้วน้ำขึ้นมาดื่มซะดีๆ! 👀💧'
+  ],
+  strict: [
+    'วินัยคือหัวใจของสุขภาพ! ยกแก้วดื่มน้ำเดี๋ยวนี้ ห้ามผัดวันประกันพรุ่ง! 🔥',
+    'ร่างกายขาดน้ำ = ประสิทธิภาพลดลง 20%! เติมน้ำเข้าสู่ระบบทันที! 💪',
+    'อย่าปล่อยให้เป้าหมายวันนี้หลุดมือ ดื่มน้ำตามตารางเดี๋ยวนี้ครับ! 🏆',
+    'โค้ชเตือนแล้วนะ! ลุกขึ้นยืดเส้นยืดสายและดื่มน้ำ 1 แก้วทันที! ⚡'
+  ]
+};
+const MESSAGES = TONE_MESSAGES.health;
+
+function pickReminderMessage(rem, idx = 0) {
+  const list = TONE_MESSAGES[rem?.tone] || TONE_MESSAGES.health;
+  return list[idx % list.length];
+}
 
 async function sendPush(clientId, client, payload) {
   if (!client?.subscription) return false;
@@ -129,27 +155,154 @@ async function fetchLineBotInfo(token) {
   }
 }
 
-async function sendLineMessage({ token, userId, text, glass = 250, consumed = 0, goal = 2000 }) {
-  const cleanToken = (token || store.defaultLineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
-  if (!cleanToken) return { ok: false, error: 'กรุณาใส่ LINE Channel Access Token' };
-  const targetUser = (userId || store.lastLineUserId || '').trim();
+const APP_PUBLIC_URL = process.env.RENDER_EXTERNAL_URL || 'https://smartwaterdrink.onrender.com';
+
+const QUICK_REPLY_ITEMS = [
+  { type: 'action', action: { type: 'message', label: '💧 +150 มล.', text: '+150' } },
+  { type: 'action', action: { type: 'message', label: '🥤 +250 มล.', text: '+250' } },
+  { type: 'action', action: { type: 'message', label: '🍶 +500 มล.', text: '+500' } },
+  { type: 'action', action: { type: 'message', label: '📊 เช็กยอดวันนี้', text: 'สถานะ' } },
+  { type: 'action', action: { type: 'message', label: '↩️ ลบแก้วล่าสุด', text: 'ยกเลิก' } },
+  { type: 'action', action: { type: 'message', label: '🏆 สรุป 7 วัน', text: 'สรุป' } },
+  { type: 'action', action: { type: 'message', label: '⏰ เลื่อน 30 นาที', text: 'เลื่อน 30 นาที' } }
+];
+
+function getContextTheme(mode, consumed, goal) {
+  if (mode === 'summary') {
+    return { bg: '#1E293B', badgeColor: '#93C5FD', barColor: '#38BDF8', badge: '🌙 สรุปผลการดื่มน้ำ', title: 'รายงานสุขภาพประจำวันของคุณ' };
+  }
+  if (mode === 'celebrate' || consumed >= goal) {
+    return { bg: '#0D7A5F', badgeColor: '#A7F3D0', barColor: '#10B981', badge: '🎉 ภารกิจสำเร็จ 100%!', title: 'ดื่มน้ำครบเป้าหมายวันนี้แล้ว!' };
+  }
+  if (mode === 'behind') {
+    return { bg: '#C2410C', badgeColor: '#FED7AA', barColor: '#F97316', badge: '⚡ เร่งสปีดอีกนิด!', title: 'ตอนนี้ดื่มช้ากว่าแผน มาจิบน้ำกัน!' };
+  }
+  const hr = new Date().getHours();
+  if (hr >= 5 && hr < 11) {
+    return { bg: '#0284C7', badgeColor: '#E0F2FE', barColor: '#0EA5E9', badge: '🌅 อรุณสวัสดิ์ยามเช้า', title: 'เริ่มต้นวันใหม่ด้วยน้ำสะอาด!' };
+  }
+  if (hr >= 11 && hr < 17) {
+    return { bg: '#0F4C5C', badgeColor: '#BDE6F0', barColor: '#2E9BD6', badge: '☀️ เติมความสดชื่นยามบ่าย', title: 'ได้เวลาพักสายตาและจิบน้ำแล้ว!' };
+  }
+  return { bg: '#1E3A8A', badgeColor: '#DBEAFE', barColor: '#3B82F6', badge: '🌆 ช่วงเย็นแล้ว', title: 'เติมน้ำให้ครบเป้าก่อนเข้านอนนะ' };
+}
+
+function buildLineFlexMessage({ text, glass = 250, consumed = 0, goal = 2000, mode = 'auto', customMsg = '', extraStats = null }) {
   const pct = Math.min(100, Math.round((consumed / Math.max(1, goal)) * 100));
   const left = Math.max(0, goal - consumed);
+  const theme = getContextTheme(mode, consumed, goal);
 
-  const flexBubble = {
+  const bodyContents = [
+    { type: 'text', text, wrap: true, color: '#1B2A2E', size: 'md' }
+  ];
+
+  if (customMsg && customMsg.trim()) {
+    bodyContents.push({
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#F0F9FF',
+      cornerRadius: '8px',
+      paddingAll: '10px',
+      margin: 'sm',
+      contents: [
+        { type: 'text', text: `💬 โน้ตของคุณ: ${customMsg.trim()}`, wrap: true, size: 'xs', color: '#0369A1', weight: 'bold' }
+      ]
+    });
+  }
+
+  bodyContents.push(
+    {
+      type: 'box',
+      layout: 'baseline',
+      justifyContent: 'space-between',
+      margin: 'md',
+      contents: [
+        { type: 'text', text: `ดื่มแล้ว ${consumed} / ${goal} มล.`, size: 'sm', color: '#4d6a72', weight: 'bold' },
+        { type: 'text', text: `${pct}%`, size: 'sm', color: theme.barColor, weight: 'bold', align: 'end' }
+      ]
+    },
+    {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#E6F4F8',
+      height: '10px',
+      cornerRadius: '5px',
+      contents: [
+        {
+          type: 'box',
+          layout: 'vertical',
+          backgroundColor: theme.barColor,
+          height: '10px',
+          cornerRadius: '5px',
+          width: `${Math.max(4, pct)}%`,
+          contents: []
+        }
+      ]
+    },
+    {
+      type: 'text',
+      text: left > 0 ? `เหลืออีก ${left} มล. (ประมาณ ${Math.ceil(left / Math.max(100, glass))} แก้ว)` : '🏆 ยอดเยี่ยม! วันนี้คุณดื่มน้ำครบตามเป้าหมายแล้ว',
+      size: 'xs',
+      color: left > 0 ? '#4d6a72' : '#0D7A5F',
+      weight: left > 0 ? 'regular' : 'bold'
+    }
+  );
+
+  if (extraStats) {
+    bodyContents.push({
+      type: 'box',
+      layout: 'horizontal',
+      backgroundColor: '#F8FAFC',
+      cornerRadius: '10px',
+      paddingAll: '10px',
+      margin: 'md',
+      contents: [
+        {
+          type: 'box',
+          layout: 'vertical',
+          flex: 1,
+          contents: [
+            { type: 'text', text: 'วันนี้ดื่มไป', size: 'xxs', color: '#64748B', align: 'center' },
+            { type: 'text', text: `${extraStats.cups || 0} แก้ว`, size: 'sm', weight: 'bold', color: '#0F4C5C', align: 'center' }
+          ]
+        },
+        {
+          type: 'box',
+          layout: 'vertical',
+          flex: 1,
+          contents: [
+            { type: 'text', text: 'เฉลี่ย 7 วัน', size: 'xxs', color: '#64748B', align: 'center' },
+            { type: 'text', text: `${extraStats.avg7 || 0} มล.`, size: 'sm', weight: 'bold', color: '#0F4C5C', align: 'center' }
+          ]
+        },
+        {
+          type: 'box',
+          layout: 'vertical',
+          flex: 1,
+          contents: [
+            { type: 'text', text: 'ครบเป้า 7 วัน', size: 'xxs', color: '#64748B', align: 'center' },
+            { type: 'text', text: `${extraStats.streak7 || 0}/7 วัน`, size: 'sm', weight: 'bold', color: '#0D7A5F', align: 'center' }
+          ]
+        }
+      ]
+    });
+  }
+
+  return {
     type: 'flex',
-    altText: `💧 Smart Water Drink: ${text} (เหลือ ${left} มล.)`,
+    altText: `💧 Smart Water Drink: ${text} (${consumed}/${goal} มล.)`,
+    quickReply: { items: QUICK_REPLY_ITEMS },
     contents: {
       type: 'bubble',
       size: 'mega',
       header: {
         type: 'box',
         layout: 'vertical',
-        backgroundColor: '#0F4C5C',
+        backgroundColor: theme.bg,
         paddingAll: '16px',
         contents: [
-          { type: 'text', text: '💧 Smart Water Drink', color: '#BDE6F0', weight: 'bold', size: 'sm' },
-          { type: 'text', text: 'ได้เวลาดื่มน้ำแล้ว!', color: '#FFFFFF', weight: 'bold', size: 'lg', margin: 'xs' }
+          { type: 'text', text: theme.badge, color: theme.badgeColor, weight: 'bold', size: 'xs' },
+          { type: 'text', text: theme.title, color: '#FFFFFF', weight: 'bold', size: 'lg', margin: 'xs', wrap: true }
         ]
       },
       body: {
@@ -157,56 +310,94 @@ async function sendLineMessage({ token, userId, text, glass = 250, consumed = 0,
         layout: 'vertical',
         spacing: 'md',
         paddingAll: '18px',
-        contents: [
-          { type: 'text', text, wrap: true, color: '#1B2A2E', size: 'md' },
-          {
-            type: 'box',
-            layout: 'baseline',
-            justifyContent: 'space-between',
-            margin: 'md',
-            contents: [
-              { type: 'text', text: `ดื่มแล้ว ${consumed} / ${goal} มล.`, size: 'sm', color: '#4d6a72', weight: 'bold' },
-              { type: 'text', text: `${pct}%`, size: 'sm', color: '#2E9BD6', weight: 'bold', align: 'end' }
-            ]
-          },
-          {
-            type: 'box',
-            layout: 'vertical',
-            backgroundColor: '#E6F4F8',
-            height: '10px',
-            cornerRadius: '5px',
-            contents: [
-              {
-                type: 'box',
-                layout: 'vertical',
-                backgroundColor: '#2E9BD6',
-                height: '10px',
-                cornerRadius: '5px',
-                width: `${Math.max(4, pct)}%`,
-                contents: []
-              }
-            ]
-          },
-          { type: 'text', text: `เหลืออีก ${left} มล. สำหรับวันนี้`, size: 'xs', color: '#4d6a72' }
-        ]
+        contents: bodyContents
       },
       footer: {
         type: 'box',
-        layout: 'horizontal',
+        layout: 'vertical',
         spacing: 'sm',
         paddingAll: '12px',
         contents: [
           {
-            type: 'button',
-            style: 'primary',
-            color: '#0F4C5C',
-            height: 'sm',
-            action: { type: 'message', label: `+${glass} มล. (ดื่มแล้ว)`, text: `+${glass}` }
+            type: 'box',
+            layout: 'horizontal',
+            spacing: 'xs',
+            contents: [
+              {
+                type: 'button',
+                style: 'secondary',
+                height: 'sm',
+                flex: 1,
+                action: { type: 'message', label: '+150 มล.', text: '+150' }
+              },
+              {
+                type: 'button',
+                style: 'primary',
+                color: theme.bg,
+                height: 'sm',
+                flex: 1,
+                action: { type: 'message', label: `+${glass} มล.`, text: `+${glass}` }
+              },
+              {
+                type: 'button',
+                style: 'secondary',
+                height: 'sm',
+                flex: 1,
+                action: { type: 'message', label: '+500 มล.', text: '+500' }
+              }
+            ]
+          },
+          {
+            type: 'box',
+            layout: 'horizontal',
+            spacing: 'xs',
+            contents: [
+              {
+                type: 'button',
+                style: 'link',
+                height: 'sm',
+                flex: 1,
+                action: { type: 'message', label: '⏰ เลื่อน 30 นาที', text: 'เลื่อน 30 นาที' }
+              },
+              {
+                type: 'button',
+                style: 'link',
+                height: 'sm',
+                flex: 1,
+                action: { type: 'uri', label: '🌐 เปิดเว็บแอป', uri: APP_PUBLIC_URL }
+              }
+            ]
           }
         ]
       }
     }
   };
+}
+
+function calcUserStats(u, goal = 2000) {
+  const d = todayStr();
+  const todayArr = u?.logs?.[d] || [];
+  let sum7 = 0, streak7 = 0;
+  for (let i = 0; i < 7; i++) {
+    const dt = new Date();
+    dt.setDate(dt.getDate() - i);
+    const k = dt.toLocaleDateString('sv');
+    const v = (u?.logs?.[k] || []).reduce((a, b) => a + b, 0);
+    sum7 += v;
+    if (v >= goal) streak7++;
+  }
+  return {
+    cups: todayArr.length,
+    avg7: Math.round(sum7 / 7),
+    streak7
+  };
+}
+
+async function sendLineMessage({ token, userId, text, glass = 250, consumed = 0, goal = 2000, mode = 'auto', customMsg = '', extraStats = null }) {
+  const cleanToken = (token || store.defaultLineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
+  if (!cleanToken) return { ok: false, error: 'กรุณาใส่ LINE Channel Access Token' };
+  const targetUser = (userId || store.lastLineUserId || '').trim();
+  const flexBubble = buildLineFlexMessage({ text, glass, consumed, goal, mode, customMsg, extraStats });
 
   const endpoint = targetUser
     ? 'https://api.line.me/v2/bot/message/push'
@@ -246,9 +437,29 @@ function checkReminders() {
       c.day = d;
       c.consumed = 0;
       c.fired = [];
+      c.snoozeUntil = 0;
     }
+    if (c.snoozeUntil && cur < c.snoozeUntil) continue;
     const goal = c.goal || 2000;
     const glass = c.rem.glass || 250;
+    const sleepMin = mins(c.rem.sleep || '22:00');
+
+    // Nightly Summary Report at sleep time
+    if (c.rem?.lineOn && c.rem?.nightSummaryOn !== false && cur >= sleepMin && c.nightSummaryDate !== d) {
+      c.nightSummaryDate = d;
+      saveStore();
+      sendLineMessage({
+        token: c.rem.lineToken || store.defaultLineToken,
+        userId: c.rem.lineUserId,
+        text: `สรุปการดื่มน้ำประจำวันที่ ${d} ของคุณ พักผ่อนให้เพียงพอนะครับ 🌙`,
+        glass,
+        consumed: c.consumed || 0,
+        goal,
+        mode: 'summary',
+        customMsg: c.rem.customMsg || ''
+      });
+    }
+
     const list = computeSlots(c.rem, goal);
     c.fired ||= [];
     const due = list.filter(s => s.at <= cur && !c.fired.includes(s.i));
@@ -258,7 +469,8 @@ function checkReminders() {
     saveStore();
     if ((c.consumed || 0) < last.expected - glass / 2 && (c.consumed || 0) < goal) {
       const left = Math.max(0, goal - (c.consumed || 0));
-      const msgText = MESSAGES[last.i % MESSAGES.length];
+      const msgText = pickReminderMessage(c.rem, last.i);
+      const behindMuch = last.expected - (c.consumed || 0) >= glass * 1.5;
       if (c.rem?.on && c.subscription) {
         sendPush(id, c, {
           title: 'Smart Water Drink',
@@ -274,7 +486,9 @@ function checkReminders() {
           text: msgText,
           glass,
           consumed: c.consumed || 0,
-          goal
+          goal,
+          mode: behindMuch ? 'behind' : 'auto',
+          customMsg: c.rem.customMsg || ''
         });
       }
     }
@@ -284,13 +498,33 @@ function checkReminders() {
     if (!u.rem?.lineOn || (!u.rem?.lineToken && !store.defaultLineToken)) continue;
     checked++;
     const tok = u.rem.lineToken || store.defaultLineToken;
-    const covered = Object.values(store.clients).some(c => c.rem?.lineOn && (c.rem?.lineToken || store.defaultLineToken) === tok);
+    const covered = Object.values(store.clients).some(c => c.rem?.lineOn && (c.rem?.lineToken || store.defaultLineToken) === tok && c.rem?.lineUserId === u.rem?.lineUserId);
     if (covered) continue;
+    if (u.snoozeDay === d && u.snoozeUntil && cur < u.snoozeUntil) continue;
     u.firedByDay ||= {};
     const fired = (u.firedByDay[d] ||= []);
     const goal = u.goal || 2000;
     const glass = u.rem.glass || 250;
     const consumed = (u.logs?.[d] || []).reduce((a, b) => a + b, 0);
+    const sleepMin = mins(u.rem.sleep || '22:00');
+
+    // Nightly Summary Report at sleep time
+    if (u.rem?.nightSummaryOn !== false && cur >= sleepMin && u.nightSummaryDate !== d) {
+      u.nightSummaryDate = d;
+      saveStore();
+      sendLineMessage({
+        token: tok,
+        userId: u.rem.lineUserId,
+        text: `สรุปการดื่มน้ำประจำวันที่ ${d} ของคุณ (${email}) พักผ่อนให้เพียงพอนะครับ 🌙`,
+        glass,
+        consumed,
+        goal,
+        mode: 'summary',
+        customMsg: u.rem.customMsg || '',
+        extraStats: calcUserStats(u, goal)
+      });
+    }
+
     const list = computeSlots(u.rem, goal);
     const due = list.filter(s => s.at <= cur && !fired.includes(s.i));
     if (!due.length) continue;
@@ -298,13 +532,17 @@ function checkReminders() {
     const last = due[due.length - 1];
     saveStore();
     if (consumed < last.expected - glass / 2 && consumed < goal) {
+      const behindMuch = last.expected - consumed >= glass * 1.5;
       sendLineMessage({
         token: tok,
         userId: u.rem.lineUserId,
-        text: MESSAGES[last.i % MESSAGES.length],
+        text: pickReminderMessage(u.rem, last.i),
         glass,
         consumed,
-        goal
+        goal,
+        mode: behindMuch ? 'behind' : 'auto',
+        customMsg: u.rem.customMsg || '',
+        extraStats: calcUserStats(u, goal)
       });
     }
   }
@@ -541,13 +779,20 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
     const data = await readJson(req);
     const tok = (data.lineToken || store.defaultLineToken || '').trim();
     const botInfo = tok ? await fetchLineBotInfo(tok) : null;
+    const mode = data.mode || 'auto';
+    const baseText = mode === 'summary'
+      ? `สรุปการดื่มน้ำประจำวันที่ ${todayStr()} ของคุณ พักผ่อนให้เพียงพอนะครับ 🌙`
+      : pickReminderMessage({ tone: data.tone || 'health' }, 0);
     const result = await sendLineMessage({
       token: tok,
       userId: data.lineUserId,
-      text: 'ทดสอบแจ้งเตือนผ่าน LINE สำเร็จ! กดปุ่มด้านล่างเพื่อบันทึกน้ำจากในแชต LINE ได้เลย',
+      text: baseText,
       glass: data.glass || 250,
       consumed: data.consumed || 0,
-      goal: data.goal || 2000
+      goal: data.goal || 2000,
+      mode,
+      customMsg: data.customMsg || '',
+      extraStats: data.extraStats || null
     });
     res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify(Object.assign(result, { botInfo })));
@@ -557,6 +802,20 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
     const body = await readJson(req);
     const events = body.events || [];
     const d = todayStr();
+    store.lineLinks ||= {};
+
+    const resolveTargetUsers = uid => {
+      const linkedEmail = uid && store.lineLinks[uid];
+      if (linkedEmail && store.users?.[linkedEmail]) {
+        return [[linkedEmail, store.users[linkedEmail]]];
+      }
+      const byUid = Object.entries(store.users || {}).filter(([, u]) => u.rem?.lineUserId === uid);
+      if (byUid.length) return byUid;
+      const byLineOn = Object.entries(store.users || {}).filter(([, u]) => u.rem?.lineOn);
+      if (byLineOn.length) return byLineOn;
+      return Object.entries(store.users || {});
+    };
+
     for (const ev of events) {
       const uid = ev.source?.userId;
       if (uid) {
@@ -565,38 +824,144 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
       }
       if (ev.type === 'message' && ev.message?.type === 'text' && ev.replyToken) {
         const txt = ev.message.text.trim();
-        const m = txt.match(/^\+?(\d{2,4})/);
-        // Find matching user or client token to reply
         const anyUser = Object.values(store.users || {}).find(u => u.rem?.lineToken) ||
                         Object.values(store.clients || {}).find(c => c.rem?.lineToken);
-        const token = anyUser?.rem?.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN;
-        let replyText = `เชื่อมต่อ Smart Water Drink สำเร็จ!\nLINE User ID ของคุณคือ:\n${uid}\n(พิมพ์ +250 เพื่อบันทึกน้ำจากในแชตได้ทันที)`;
-        if (m) {
-          const addMl = Math.round(+m[1]);
-          let newTotal = addMl;
-          let goal = 2000;
-          for (const u of Object.values(store.users || {})) {
-            if (u.rem?.lineToken) {
-              u.logs ||= {};
-              u.logs[d] ||= [];
-              u.logs[d].push(addMl);
-              newTotal = u.logs[d].reduce((a, b) => a + b, 0);
-              goal = u.goal || 2000;
-            }
+        const token = store.defaultLineToken || anyUser?.rem?.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN;
+
+        const mAdd = txt.match(/^\+?(\d{2,4})$/);
+        const mEmail = txt.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+        let replyMessages = [];
+
+        if (mEmail) {
+          const email = mEmail[1].toLowerCase();
+          store.users ||= {};
+          store.users[email] ||= { logs: {}, goal: 2000, rem: { on: true, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 } };
+          store.users[email].rem ||= { on: true, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 };
+          store.users[email].rem.lineOn = true;
+          if (uid) {
+            store.users[email].rem.lineUserId = uid;
+            store.lineLinks[uid] = email;
+          }
+          saveStore();
+          const u = store.users[email];
+          const consumed = (u.logs?.[d] || []).reduce((a, b) => a + b, 0);
+          const goal = u.goal || 2000;
+          replyMessages = [buildLineFlexMessage({
+            text: `🔗 ผูกบัญชี LINE กับ ${email} สำเร็จแล้ว! กดปุ่มด้านล่างเพื่อบันทึกน้ำเข้าบัญชีของคุณได้ทันที`,
+            glass: u.rem?.glass || 250,
+            consumed,
+            goal,
+            mode: 'auto',
+            customMsg: u.rem?.customMsg || '',
+            extraStats: calcUserStats(u, goal)
+          })];
+        } else if (mAdd) {
+          const addMl = Math.round(+mAdd[1]);
+          let newTotal = addMl, goal = 2000, glass = 250, customMsg = '', extraStats = null;
+          const targets = resolveTargetUsers(uid);
+          for (const [, u] of targets) {
+            u.logs ||= {};
+            u.logs[d] ||= [];
+            u.logs[d].push(addMl);
+            newTotal = u.logs[d].reduce((a, b) => a + b, 0);
+            goal = u.goal || 2000;
+            glass = u.rem?.glass || 250;
+            customMsg = u.rem?.customMsg || '';
+            extraStats = calcUserStats(u, goal);
           }
           for (const c of Object.values(store.clients || {})) {
-            if (c.rem?.lineToken) {
+            if (!uid || !c.rem?.lineUserId || c.rem.lineUserId === uid) {
               c.consumed = (c.consumed || 0) + addMl;
               c.pendingAdd ||= [];
               c.pendingAdd.push(addMl);
-              newTotal = c.consumed;
-              goal = c.goal || 2000;
+              if (!targets.length) {
+                newTotal = c.consumed;
+                goal = c.goal || 2000;
+              }
             }
           }
           saveStore();
-          replyText = `💧 บันทึกน้ำ +${addMl} มล. เรียบร้อยแล้ว!\nรวมวันนี้: ${newTotal} / ${goal} มล.`;
+          const hitGoal = newTotal >= goal;
+          replyMessages = [buildLineFlexMessage({
+            text: hitGoal
+              ? `🎉 บันทึกน้ำ +${addMl} มล. สำเร็จ! ยินดีด้วย วันนี้คุณดื่มครบเป้าหมายแล้ว!`
+              : `💧 บันทึกน้ำ +${addMl} มล. เรียบร้อยแล้ว! สู้ต่อไปอีกนิดนะครับ`,
+            glass,
+            consumed: newTotal,
+            goal,
+            mode: hitGoal ? 'celebrate' : 'auto',
+            customMsg,
+            extraStats
+          })];
+        } else if (/^(ยกเลิก|ลบแก้วล่าสุด|undo)$/i.test(txt)) {
+          let removed = 0, newTotal = 0, goal = 2000, glass = 250, extraStats = null;
+          const targets = resolveTargetUsers(uid);
+          for (const [, u] of targets) {
+            const arr = u.logs?.[d] || [];
+            if (arr.length) removed = arr.pop();
+            newTotal = arr.reduce((a, b) => a + b, 0);
+            goal = u.goal || 2000;
+            glass = u.rem?.glass || 250;
+            extraStats = calcUserStats(u, goal);
+          }
+          saveStore();
+          replyMessages = [buildLineFlexMessage({
+            text: removed ? `↩️ ยกเลิกรายการล่าสุด (-${removed} มล.) เรียบร้อยแล้ว` : 'วันนี้ยังไม่มีรายการดื่มน้ำให้ยกเลิกครับ',
+            glass,
+            consumed: newTotal,
+            goal,
+            mode: 'auto',
+            extraStats
+          })];
+        } else if (/^(สรุป|สรุป 7 วัน|รายงาน)$/i.test(txt)) {
+          const targets = resolveTargetUsers(uid);
+          const [, u] = targets[0] || [null, null];
+          const goal = u?.goal || 2000;
+          const consumed = (u?.logs?.[d] || []).reduce((a, b) => a + b, 0);
+          replyMessages = [buildLineFlexMessage({
+            text: `📊 สรุปสถิติการดื่มน้ำของคุณประจำวันที่ ${d}`,
+            glass: u?.rem?.glass || 250,
+            consumed,
+            goal,
+            mode: 'summary',
+            customMsg: u?.rem?.customMsg || '',
+            extraStats: calcUserStats(u, goal)
+          })];
+        } else if (/เลื่อน/.test(txt)) {
+          const snoozeUntil = nowMin() + 30;
+          const targets = resolveTargetUsers(uid);
+          for (const [, u] of targets) {
+            u.snoozeDay = d;
+            u.snoozeUntil = snoozeUntil;
+          }
+          for (const c of Object.values(store.clients || {})) {
+            c.snoozeUntil = snoozeUntil;
+          }
+          saveStore();
+          replyMessages = [{
+            type: 'text',
+            text: '⏰ รับทราบครับ! เลื่อนการแจ้งเตือนออกไปอีก 30 นาที แล้วค่อยมาดื่มน้ำกันนะ 💧',
+            quickReply: { items: QUICK_REPLY_ITEMS }
+          }];
+        } else {
+          const targets = resolveTargetUsers(uid);
+          const [email, u] = targets[0] || [null, null];
+          const goal = u?.goal || 2000;
+          const consumed = (u?.logs?.[d] || []).reduce((a, b) => a + b, 0);
+          replyMessages = [buildLineFlexMessage({
+            text: email
+              ? `📊 สถานะวันนี้ของบัญชี ${email} (LINE ID: ${uid})`
+              : `👋 ยินดีต้อนรับสู่ Smart Water Drink!\nพิมพ์อีเมลของคุณในแชตนี้เพื่อผูกบัญชี หรือกดปุ่ม +มล. ด้านล่างได้เลย`,
+            glass: u?.rem?.glass || 250,
+            consumed,
+            goal,
+            mode: 'auto',
+            customMsg: u?.rem?.customMsg || '',
+            extraStats: u ? calcUserStats(u, goal) : null
+          })];
         }
-        if (token) {
+
+        if (token && replyMessages.length) {
           await fetch('https://api.line.me/v2/bot/message/reply', {
             method: 'POST',
             headers: {
@@ -605,7 +970,7 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
             },
             body: JSON.stringify({
               replyToken: ev.replyToken,
-              messages: [{ type: 'text', text: replyText }]
+              messages: replyMessages
             })
           }).catch(() => {});
         }

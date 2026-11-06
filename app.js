@@ -790,6 +790,9 @@
       on: $('remOn').checked, wake: $('wake').value, sleep: $('sleep').value,
       glass: Math.max(100, +$('glass').value || 250),
       lineOn: $('lineOn').checked,
+      nightSummaryOn: $('nightSummaryOn') ? $('nightSummaryOn').checked : true,
+      tone: $('remTone') ? $('remTone').value : 'health',
+      customMsg: $('remCustomMsg') ? $('remCustomMsg').value.trim() : '',
       lineToken: $('lineToken').value.trim(),
       lineUserId: $('lineUserId').value.trim()
     });
@@ -832,8 +835,10 @@
       </div>`;
   }
 
-  $('testLineBtn').onclick = async () => {
-    const btn = $('testLineBtn'), msg = $('remMsg');
+  async function sendTestLineCard(mode = 'auto') {
+    const btn = mode === 'summary' ? $('testSummaryLineBtn') : $('testLineBtn');
+    const origText = btn ? btn.textContent : '';
+    const msg = $('remMsg');
     const lineToken = $('lineToken').value.trim();
     const lineUserId = $('lineUserId').value.trim();
     if (!lineToken && !serverHasLineToken) {
@@ -844,13 +849,27 @@
     }
     Object.assign(state.rem, {
       lineOn: true,
+      nightSummaryOn: $('nightSummaryOn') ? $('nightSummaryOn').checked : true,
+      tone: $('remTone') ? $('remTone').value : 'health',
+      customMsg: $('remCustomMsg') ? $('remCustomMsg').value.trim() : '',
       lineToken,
       lineUserId
     });
     $('lineOn').checked = true;
     save();
-    btn.disabled = true;
-    btn.textContent = 'กำลังส่งเข้า LINE...';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'กำลังส่งเข้า LINE...';
+    }
+    // Compute 7-day stats for summary card
+    let sum7 = 0, streak7 = 0;
+    for (let i = 0; i < 7; i++) {
+      const dt = new Date(); dt.setDate(dt.getDate() - i);
+      const k = dt.toLocaleDateString('sv');
+      const v = (state.logs[k] || []).reduce((a, b) => a + b, 0);
+      sum7 += v;
+      if (v >= state.goal) streak7++;
+    }
     try {
       const res = await fetch('/api/test-line', {
         method: 'POST',
@@ -860,7 +879,15 @@
           lineUserId,
           glass: state.rem.glass || 250,
           consumed: total(),
-          goal: state.goal
+          goal: state.goal,
+          mode,
+          tone: state.rem.tone || 'health',
+          customMsg: state.rem.customMsg || '',
+          extraStats: {
+            cups: dayLog().length,
+            avg7: Math.round(sum7 / 7),
+            streak7
+          }
         })
       });
       const data = await res.json();
@@ -869,7 +896,9 @@
         renderLineBotBanner(data.botInfo);
       }
       if (data.ok) {
-        msg.textContent = 'ส่งข้อความการ์ด Flex Message เข้า LINE สำเร็จแล้ว! เปิดดูในแอป LINE ได้เลย';
+        msg.textContent = mode === 'summary'
+          ? 'ส่งการ์ดสรุปผลประจำวันเข้า LINE สำเร็จแล้ว! เปิดดูในแอป LINE ได้เลย'
+          : 'ส่งการ์ดเตือนดื่มน้ำพร้อมปุ่มลัด Quick Reply เข้า LINE สำเร็จแล้ว!';
         toast('ส่งเข้า LINE สำเร็จแล้ว!');
       } else {
         msg.textContent = `ส่งเข้า LINE ไม่สำเร็จ: ${data.error || 'ตรวจสอบ Token อีกครั้ง'}`;
@@ -878,9 +907,13 @@
     } catch (_) {
       msg.textContent = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ส่ง LINE ได้';
     }
-    btn.disabled = false;
-    btn.textContent = 'ส่งทดสอบเข้า LINE ทันที';
-  };
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
+  }
+  $('testLineBtn').onclick = () => sendTestLineCard('auto');
+  if ($('testSummaryLineBtn')) $('testSummaryLineBtn').onclick = () => sendTestLineCard('summary');
 
   $('testPushBtn').onclick = async () => {
     const btn = $('testPushBtn'), msg = $('remMsg');
@@ -1141,6 +1174,9 @@
     $('wake').value = state.rem.wake; $('sleep').value = state.rem.sleep;
     $('glass').value = state.rem.glass; $('remOn').checked = state.rem.on;
     $('lineOn').checked = !!state.rem.lineOn;
+    if ($('nightSummaryOn')) $('nightSummaryOn').checked = state.rem.nightSummaryOn !== false;
+    if ($('remTone')) $('remTone').value = state.rem.tone || 'health';
+    if ($('remCustomMsg')) $('remCustomMsg').value = state.rem.customMsg || '';
     $('lineToken').value = state.rem.lineToken || '';
     $('lineUserId').value = state.rem.lineUserId || '';
     const wh = $('webhookUrlText');
