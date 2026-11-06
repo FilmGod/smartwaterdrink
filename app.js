@@ -457,7 +457,6 @@
   });
 
   /* ---------- Real-time Phone Tilt & Shake (DeviceOrientation / DeviceMotion) ---------- */
-  const tiltBtn = $('tiltBtn');
   const soundToggleBtn = $('soundToggleBtn');
 
   function updateSoundBtn() {
@@ -479,10 +478,6 @@
   function handleOrientation(e) {
     if (e.gamma === null || e.gamma === undefined) return;
     const g = Math.max(-65, Math.min(65, e.gamma));
-    if (!tiltActive && Math.abs(g) > 0.2) {
-      tiltActive = true;
-      if (tiltBtn) tiltBtn.classList.add('active');
-    }
     // Opposite sign so water surface stays horizontal with Earth gravity when phone tilts
     const nextTarget = -g / 20;
     if (lastGamma !== null) {
@@ -497,11 +492,6 @@
     }
     lastGamma = g;
     tiltTarget = nextTarget;
-    if (tiltBtn && Math.abs(g) > 1) {
-      tiltBtn.textContent = `📱 เอียง ${Math.round(Math.abs(g))}°`;
-    } else if (tiltBtn && tiltActive) {
-      tiltBtn.textContent = '📱 ตั้งตรง 0°';
-    }
   }
 
   let lastShakeT = 0;
@@ -523,7 +513,7 @@
   }
 
   let motionSubscribed = false;
-  async function enableDeviceTilt(fromBtn = false) {
+  async function enableDeviceTilt() {
     try {
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         const p = await DeviceOrientationEvent.requestPermission();
@@ -538,18 +528,9 @@
       window.addEventListener('deviceorientation', handleOrientation, true);
       window.addEventListener('devicemotion', handleMotion, true);
     }
-    if (fromBtn) {
-      // Demo slosh on tap + confirm sensor active
-      sloshVel += (Math.random() > 0.5 ? 1 : -1) * 0.45;
-      pluck(Math.floor(N / 2), 9, 5);
-      playSloshSound(0.5);
-      if (tiltBtn) tiltBtn.classList.add('active');
-      toast('เปิดเซนเซอร์เอียงน้ำตามมือถือแล้ว ลองเอียงหรือเขย่าเครื่องดูครับ!');
-    }
   }
-  enableDeviceTilt(false);
-  document.addEventListener('pointerdown', () => enableDeviceTilt(false), { once: true });
-  if (tiltBtn) tiltBtn.onclick = () => enableDeviceTilt(true);
+  enableDeviceTilt();
+  document.addEventListener('pointerdown', () => enableDeviceTilt(), { once: true });
 
   let lastStatus = '';
   function render() {
