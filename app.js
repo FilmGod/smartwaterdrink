@@ -144,8 +144,9 @@
   let sloshAngle = 0, sloshVel = 0, agitation = 0;
   let tiltTarget = 0, lastGamma = null, tiltActive = false;
   let soundOn = localStorage.getItem('swd.sound') !== '0';
+  let soundStyle = localStorage.getItem('swd.soundStyle') || 'bubbles';
 
-  /* ---------- Web Audio API: Realistic Water Pour & Slosh Sound ---------- */
+  /* ---------- Web Audio API: 5 Selectable Water Pour & Slosh Sound Styles ---------- */
   let audioCtx = null;
   function getAudio() {
     if (!soundOn) return null;
@@ -184,86 +185,179 @@
     const ctx = getAudio();
     if (!ctx) return;
     const now = ctx.currentTime;
-    // Duration scales realistically with poured volume (ml): ~0.62s for 150ml, ~0.95s for 250ml, ~1.55s for 500ml
-    const dur = Math.min(2.3, Math.max(0.48, 0.32 + (ml / 250) * 0.62));
-    const intensity = Math.min(1.35, Math.max(0.65, ml / 250));
+    // Duration scales with poured volume (ml): ~0.55s for 150ml, ~0.88s for 250ml, ~1.45s for 500ml
+    const dur = Math.min(2.1, Math.max(0.45, 0.28 + (ml / 250) * 0.58));
+    const intensity = Math.min(1.3, Math.max(0.7, ml / 250));
 
-    // 1. Turbulent stream + Helmholtz bottle cavity resonance (pitch rises as bottle fills!)
-    const bufLen = Math.ceil(ctx.sampleRate * dur);
-    const noiseBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
-    const data = noiseBuf.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0;
-    for (let i = 0; i < bufLen; i++) {
-      const white = Math.random() * 2 - 1;
-      // Soft pink-ish filtering for natural liquid turbulence
-      b0 = 0.997 * b0 + white * 0.029;
-      b1 = 0.985 * b1 + white * 0.032;
-      b2 = 0.950 * b2 + white * 0.048;
-      // Rhythmic glug-glug modulation
-      const glug = 0.78 + 0.22 * Math.sin((i / ctx.sampleRate) * Math.PI * 2 * 11.5);
-      data[i] = (b0 + b1 + b2 + white * 0.04) * glug;
+    if (soundStyle === 'bubbles') {
+      // Style 1: 🫧 หยดน้ำปุ๋งๆ (Pure clean sine water droplets & rising pitch blips — zero noise hiss)
+      const count = Math.min(20, Math.max(5, Math.round(ml / 30)));
+      for (let i = 0; i < count; i++) {
+        const prog = i / Math.max(1, count - 1);
+        const t0 = now + 0.02 + prog * (dur - 0.1) + (Math.random() - 0.5) * 0.022;
+        const fillNow = fBefore + (fAfter - fBefore) * prog;
+        const baseF = 360 + fillNow * 380 + (Math.random() - 0.3) * 140;
+        const bDur = 0.055 + Math.random() * 0.03;
+
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(baseF, t0);
+        osc.frequency.exponentialRampToValueAtTime(baseF * (1.72 + Math.random() * 0.22), t0 + bDur);
+
+        const peak = (0.085 + Math.random() * 0.045) * intensity;
+        g.gain.setValueAtTime(0.0008, t0);
+        g.gain.linearRampToValueAtTime(peak, t0 + 0.009);
+        g.gain.exponentialRampToValueAtTime(0.0008, t0 + bDur);
+        osc.connect(g).connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + bDur + 0.01);
+      }
+    } else if (soundStyle === 'glug') {
+      // Style 2: 🍶 รินน้ำขวดแก้ว (Deep rhythmic bottle "glug-glug-glug" with rising neck resonance)
+      const glugs = Math.min(14, Math.max(4, Math.round(ml / 42)));
+      const step = (dur - 0.08) / glugs;
+      for (let i = 0; i < glugs; i++) {
+        const prog = i / Math.max(1, glugs - 1);
+        const t0 = now + 0.02 + i * step;
+        const fillNow = fBefore + (fAfter - fBefore) * prog;
+        const fLow = 175 + fillNow * 210 + (i % 2) * 18;
+        const gDur = Math.min(0.11, step * 0.88);
+
+        const osc = ctx.createOscillator();
+        const sub = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        sub.type = 'triangle';
+        osc.frequency.setValueAtTime(fLow * 0.85, t0);
+        osc.frequency.exponentialRampToValueAtTime(fLow * 1.55, t0 + gDur);
+        sub.frequency.setValueAtTime(fLow * 0.5, t0);
+        sub.frequency.exponentialRampToValueAtTime(fLow * 0.9, t0 + gDur);
+
+        const peak = 0.12 * intensity;
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.linearRampToValueAtTime(peak, t0 + 0.016);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + gDur);
+
+        osc.connect(g);
+        sub.connect(g);
+        g.connect(ctx.destination);
+        osc.start(t0);
+        sub.start(t0);
+        osc.stop(t0 + gDur + 0.01);
+        sub.stop(t0 + gDur + 0.01);
+      }
+    } else if (soundStyle === 'ice') {
+      // Style 3: 🧊 เทน้ำใส่น้ำแข็ง (Crisp glass-and-ice clinks + refreshing droplets)
+      const clinks = Math.min(10, Math.max(3, Math.round(ml / 55)));
+      for (let i = 0; i < clinks; i++) {
+        const t0 = now + 0.03 + (i / clinks) * (dur - 0.1) + Math.random() * 0.035;
+        const fIce = 1750 + Math.random() * 1150;
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc1.type = 'sine';
+        osc2.type = 'triangle';
+        osc1.frequency.setValueAtTime(fIce, t0);
+        osc2.frequency.setValueAtTime(fIce * 1.414, t0);
+        g.gain.setValueAtTime(0.0008, t0);
+        g.gain.linearRampToValueAtTime(0.065 * intensity, t0 + 0.004);
+        g.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.085);
+        osc1.connect(g);
+        osc2.connect(g);
+        g.connect(ctx.destination);
+        osc1.start(t0);
+        osc2.start(t0);
+        osc1.stop(t0 + 0.09);
+        osc2.stop(t0 + 0.09);
+      }
+      // Underlying cool water droplets
+      const dropsCount = Math.min(14, Math.max(4, Math.round(ml / 38)));
+      for (let i = 0; i < dropsCount; i++) {
+        const prog = i / Math.max(1, dropsCount - 1);
+        const t0 = now + 0.04 + prog * (dur - 0.1);
+        const baseF = 440 + prog * 340 + Math.random() * 120;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(baseF, t0);
+        osc.frequency.exponentialRampToValueAtTime(baseF * 1.65, t0 + 0.05);
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.linearRampToValueAtTime(0.06 * intensity, t0 + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.055);
+        osc.connect(g).connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + 0.06);
+      }
+    } else if (soundStyle === 'sparkle') {
+      // Style 4: ✨ หยดน้ำคริสตัล (Pentatonic aqua harp / marimba water droplets rising with ml)
+      const scale = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.5, 1567.98];
+      const notes = Math.min(14, Math.max(4, Math.round(ml / 36)));
+      for (let i = 0; i < notes; i++) {
+        const prog = i / Math.max(1, notes - 1);
+        const t0 = now + prog * (dur - 0.12);
+        const idx = Math.min(scale.length - 1, Math.floor(prog * (scale.length - 1)) + (i % 2));
+        const freq = scale[idx];
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq * 0.96, t0);
+        osc.frequency.exponentialRampToValueAtTime(freq, t0 + 0.025);
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.linearRampToValueAtTime(0.085 * intensity, t0 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.22);
+        osc.connect(g).connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + 0.23);
+      }
+    } else {
+      // Style 5: 🏞️ สายน้ำรินไหล (Warm, ultra-soft low-passed stream + gentle bubbles)
+      const bufLen = Math.ceil(ctx.sampleRate * dur);
+      const noiseBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      let b0 = 0, b1 = 0;
+      for (let i = 0; i < bufLen; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.992 * b0 + white * 0.04;
+        b1 = 0.965 * b1 + b0 * 0.06;
+        data[i] = b1 * (0.8 + 0.2 * Math.sin((i / ctx.sampleRate) * Math.PI * 2 * 8));
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuf;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'bandpass';
+      lp.Q.setValueAtTime(3.2, now);
+      lp.frequency.setValueAtTime(320 + fBefore * 280, now);
+      lp.frequency.exponentialRampToValueAtTime(420 + fAfter * 420, now + dur);
+
+      const sg = ctx.createGain();
+      sg.gain.setValueAtTime(0.001, now);
+      sg.gain.linearRampToValueAtTime(0.16 * intensity, now + 0.08);
+      sg.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      noise.connect(lp).connect(sg).connect(ctx.destination);
+      noise.start(now);
+      noise.stop(now + dur + 0.02);
+
+      const numBubbles = Math.min(18, Math.max(5, Math.round(ml / 32)));
+      for (let i = 0; i < numBubbles; i++) {
+        const prog = i / Math.max(1, numBubbles - 1);
+        const t0 = now + 0.05 + prog * (dur - 0.12);
+        const baseF = 340 + (fBefore + (fAfter - fBefore) * prog) * 380 + (Math.random() - 0.4) * 110;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(baseF, t0);
+        osc.frequency.exponentialRampToValueAtTime(baseF * 1.62, t0 + 0.055);
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.linearRampToValueAtTime(0.065 * intensity, t0 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.06);
+        osc.connect(g).connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + 0.065);
+      }
     }
 
-    const noise = ctx.createBufferSource();
-    noise.buffer = noiseBuf;
-
-    // Bandpass 1: Bottle air-cavity resonance rising with water fill level (fBefore -> fAfter)
-    const cavFilter = ctx.createBiquadFilter();
-    cavFilter.type = 'bandpass';
-    cavFilter.Q.setValueAtTime(5.2, now);
-    const fStart = 290 + fBefore * 420;
-    const fEnd = Math.max(fStart + 45, 340 + fAfter * 580);
-    cavFilter.frequency.setValueAtTime(fStart, now);
-    cavFilter.frequency.exponentialRampToValueAtTime(fEnd, now + dur);
-
-    // Bandpass 2: Upper splashy stream hiss
-    const splashFilter = ctx.createBiquadFilter();
-    splashFilter.type = 'bandpass';
-    splashFilter.Q.setValueAtTime(1.8, now);
-    splashFilter.frequency.setValueAtTime(1050, now);
-    splashFilter.frequency.linearRampToValueAtTime(1450, now + dur);
-
-    const streamGain = ctx.createGain();
-    streamGain.gain.setValueAtTime(0.001, now);
-    streamGain.gain.linearRampToValueAtTime(0.24 * intensity, now + 0.09);
-    streamGain.gain.setValueAtTime(0.22 * intensity, now + Math.max(0.12, dur - 0.14));
-    streamGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-
-    noise.connect(cavFilter);
-    noise.connect(splashFilter);
-    cavFilter.connect(streamGain);
-    splashFilter.connect(streamGain);
-    streamGain.connect(ctx.destination);
-    noise.start(now);
-    noise.stop(now + dur + 0.02);
-
-    // 2. Individual acoustic bubble "bloop / glug" droplets (count scales with ml!)
-    const numBubbles = Math.min(24, Math.max(5, Math.round(ml / 28)));
-    for (let i = 0; i < numBubbles; i++) {
-      const prog = i / Math.max(1, numBubbles - 1);
-      const t0 = now + 0.07 + prog * (dur - 0.14) + (Math.random() - 0.5) * 0.03;
-      const fillNow = fBefore + (fAfter - fBefore) * prog;
-      const baseF = 330 + fillNow * 440 + (Math.random() - 0.35) * 150;
-      const bDur = 0.045 + Math.random() * 0.035;
-
-      const osc = ctx.createOscillator();
-      const bGain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(baseF, t0);
-      // Characteristic upward pitch chirp of an underwater air bubble detaching
-      osc.frequency.exponentialRampToValueAtTime(baseF * (1.58 + Math.random() * 0.25), t0 + bDur);
-
-      const peak = (0.045 + Math.random() * 0.04) * intensity;
-      bGain.gain.setValueAtTime(0.0008, t0);
-      bGain.gain.linearRampToValueAtTime(peak, t0 + 0.01);
-      bGain.gain.exponentialRampToValueAtTime(0.0008, t0 + bDur);
-
-      osc.connect(bGain).connect(ctx.destination);
-      osc.start(t0);
-      osc.stop(t0 + bDur + 0.01);
-    }
-
-    // 3. Celebratory crystal water chime when reaching 100% daily goal
+    // Celebratory crystal water chime when reaching 100% daily goal
     if (fBefore < 1 && fAfter >= 1) {
       [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
         const tC = now + dur * 0.75 + idx * 0.09;
@@ -465,12 +559,27 @@
 
   /* ---------- Real-time Phone Tilt & Shake (DeviceOrientation / DeviceMotion) ---------- */
   const soundToggleBtn = $('soundToggleBtn');
+  const soundStyleSelect = $('soundStyleSelect');
 
   function updateSoundBtn() {
     if (!soundToggleBtn) return;
     soundToggleBtn.classList.toggle('active', soundOn);
     soundToggleBtn.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
     soundToggleBtn.textContent = soundOn ? '🔊 เสียงน้ำ: เปิด' : '🔇 เสียงน้ำ: ปิด';
+    if (soundStyleSelect) soundStyleSelect.classList.toggle('active', soundOn);
+  }
+  if (soundStyleSelect) {
+    soundStyleSelect.value = soundStyle;
+    soundStyleSelect.onchange = () => {
+      soundStyle = soundStyleSelect.value || 'bubbles';
+      localStorage.setItem('swd.soundStyle', soundStyle);
+      if (!soundOn) {
+        soundOn = true;
+        localStorage.setItem('swd.sound', '1');
+        updateSoundBtn();
+      }
+      playPourSound(250, 0.35, 0.65);
+    };
   }
   updateSoundBtn();
   if (soundToggleBtn) {
@@ -478,7 +587,7 @@
       soundOn = !soundOn;
       localStorage.setItem('swd.sound', soundOn ? '1' : '0');
       updateSoundBtn();
-      if (soundOn) playSloshSound(0.5);
+      if (soundOn) playPourSound(150, 0.4, 0.55);
     };
   }
 

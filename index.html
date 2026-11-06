@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=22">
+<link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
 
@@ -200,6 +200,13 @@
             </svg>
             <div class="bottle-controls">
               <button type="button" id="soundToggleBtn" class="mini-pill active" aria-pressed="true" title="เปิด/ปิดเสียงรินน้ำ">🔊 เสียงน้ำ: เปิด</button>
+              <select id="soundStyleSelect" class="mini-pill active" aria-label="เลือกเสียงเติมน้ำ" title="เลือกสไตล์เสียงเติมน้ำ">
+                <option value="bubbles">🫧 เสียง 1: หยดน้ำปุ๋งๆ (ใสนุ่มนวล)</option>
+                <option value="glug">🍶 เสียง 2: รินน้ำขวดแก้ว (อั่กๆ ทุ้ม)</option>
+                <option value="ice">🧊 เสียง 3: เทน้ำใส่น้ำแข็ง (กริ๊งสดชื่น)</option>
+                <option value="sparkle">✨ เสียง 4: หยดน้ำคริสตัล (ใสกังวาน)</option>
+                <option value="stream">🏞️ เสียง 5: สายน้ำรินไหล (ธรรมชาติ)</option>
+              </select>
             </div>
           </div>
 
@@ -527,6 +534,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="fx" class="fx" aria-hidden="true"></div>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>
