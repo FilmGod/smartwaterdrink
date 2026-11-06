@@ -1522,7 +1522,11 @@
   };
 
   // Optional Google Identity Services (GIS) button + server-wide LINE bot info
-  fetch('/api/vapid-public-key').then(r => r.json()).then(({ googleClientId, hasDefaultLineToken, lineBotInfo }) => {
+  fetch('/api/vapid-public-key').then(r => r.json()).then(({ googleClientId, hasDefaultLineToken, lineBotInfo, tutorialYouTubeId }) => {
+    if (tutorialYouTubeId) {
+      activeTutorialYouTubeId = tutorialYouTubeId;
+      if ($('adminTutorialYtInput')) $('adminTutorialYtInput').value = tutorialYouTubeId;
+    }
     if (hasDefaultLineToken) serverHasLineToken = true;
     if (lineBotInfo) renderLineBotBanner(lineBotInfo);
     const cid = googleClientId || activeGoogleClientId;
@@ -1723,6 +1727,94 @@
     }
   };
 
+  /* ---------- Admin Tutorial Video Config ---------- */
+  if ($('adminTutorialForm')) {
+    $('adminTutorialForm').onsubmit = async e => {
+      e.preventDefault();
+      const raw = $('adminTutorialYtInput').value.trim();
+      const vid = extractYouTubeId(raw);
+      if (!vid) {
+        $('adminTutorialStatus').textContent = '⚠️ กรุณาระบุลิงก์หรือ Video ID ของ YouTube ให้ถูกต้อง';
+        return;
+      }
+      $('adminTutorialStatus').textContent = 'กำลังบันทึก...';
+      try {
+        const res = await fetch('/api/tutorial-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tutorialYouTubeId: vid })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          activeTutorialYouTubeId = data.tutorialYouTubeId;
+          localStorage.setItem('swd.tutorialVideoId', data.tutorialYouTubeId);
+          $('adminTutorialStatus').textContent = `✅ บันทึกวิดีโอสำเร็จ (ID: ${data.tutorialYouTubeId})`;
+          toast('บันทึกคลิปวิดีโอสอนการใช้งานเรียบร้อยแล้ว');
+        }
+      } catch (_) {
+        $('adminTutorialStatus').textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์';
+      }
+    };
+  }
+
+  if ($('adminPreviewTutorialBtn')) {
+    $('adminPreviewTutorialBtn').onclick = () => {
+      const raw = $('adminTutorialYtInput')?.value.trim();
+      const vid = extractYouTubeId(raw) || activeTutorialYouTubeId;
+      openTutorialModal(vid);
+    };
+  }
+
+  /* ---------- Tutorial Video & Onboarding Modal ---------- */
+  let activeTutorialYouTubeId = localStorage.getItem('swd.tutorialVideoId') || '31wW7l9sM04';
+  const tutorialModal = $('tutorialModal');
+  const tutorialVideoIframe = $('tutorialVideoIframe');
+  const closeTutorialXBtn = $('closeTutorialXBtn');
+  const startUsingAppBtn = $('startUsingAppBtn');
+  const topTutorialBtn = $('topTutorialBtn');
+  const landingTutorialBtn = $('landingTutorialBtn');
+
+  function extractYouTubeId(urlOrId) {
+    if (!urlOrId) return '';
+    const str = String(urlOrId).trim();
+    if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+    const match = str.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
+    return match ? match[1] : str;
+  }
+
+  function openTutorialModal(customId) {
+    if (!tutorialModal) return;
+    const vid = customId || activeTutorialYouTubeId;
+    if (tutorialVideoIframe) {
+      tutorialVideoIframe.src = `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0&modestbranding=1`;
+    }
+    tutorialModal.hidden = false;
+  }
+
+  function closeTutorialModal() {
+    if (!tutorialModal) return;
+    tutorialModal.hidden = true;
+    if (tutorialVideoIframe) {
+      tutorialVideoIframe.src = ''; // Stop video audio/playback immediately
+    }
+  }
+
+  if (closeTutorialXBtn) closeTutorialXBtn.onclick = closeTutorialModal;
+  if (startUsingAppBtn) {
+    startUsingAppBtn.onclick = () => {
+      localStorage.setItem('swd.tutorialSeen', '1');
+      closeTutorialModal();
+      toast('💧 เริ่มต้นดื่มน้ำแก้วแรกของวันกันเลย!');
+    };
+  }
+  if (topTutorialBtn) topTutorialBtn.onclick = () => openTutorialModal();
+  if (landingTutorialBtn) landingTutorialBtn.onclick = () => openTutorialModal();
+  if (tutorialModal) {
+    tutorialModal.addEventListener('click', e => {
+      if (e.target === tutorialModal) closeTutorialModal();
+    });
+  }
+
   /* ---------- PWA Install App Prompt Modal ---------- */
   let deferredInstallPrompt = null;
   const installAppModal = $('installAppModal');
@@ -1735,7 +1827,8 @@
   function isStandaloneApp() {
     return window.matchMedia('(display-mode: standalone)').matches ||
            window.navigator.standalone === true ||
-           document.referrer.includes('android-app://');
+           document.referrer.includes('android-app://') ||
+           location.search.includes('source=pwa');
   }
 
   function buildManualInstallGuideHTML() {
@@ -1829,7 +1922,15 @@
   /* ---------- init ---------- */
   enterApp();
   updateInstallUI();
-  if (!isStandaloneApp()) {
+  if (isStandaloneApp()) {
+    // Opened from home screen as installed app:
+    // If not seen yet, show onboarding video modal!
+    if (!localStorage.getItem('swd.tutorialSeen')) {
+      setTimeout(() => openTutorialModal(), 650);
+    }
+  } else {
+    // Opened in regular web browser:
+    // Prompt installation to phone screen
     setTimeout(openInstallModal, 450);
   }
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {

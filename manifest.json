@@ -2,7 +2,7 @@
   "name": "Smart Water Drink",
   "short_name": "WaterDrink",
   "description": "แอปคำนวณและแจ้งเตือนการดื่มน้ำอัจฉริยะเชื่อมต่อ LINE (@943raake)",
-  "start_url": "./",
+  "start_url": "./?source=pwa",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

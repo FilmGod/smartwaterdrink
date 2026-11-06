@@ -637,15 +637,27 @@ const server = http.createServer(async (req, res) => {
   }
 
 const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-68q2lvjmg79807hc12ltmk5rcat6560l.apps.googleusercontent.com';
+const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '31wW7l9sM04';
 
   if (req.method === 'GET' && url.pathname === '/api/vapid-public-key') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       publicKey: store.vapidKeys.publicKey,
       googleClientId: store.googleClientId || DEFAULT_GOOGLE_CLIENT_ID,
+      tutorialYouTubeId: store.tutorialYouTubeId || DEFAULT_TUTORIAL_YOUTUBE_ID,
       hasDefaultLineToken: !!store.defaultLineToken,
       lineBotInfo: store.lineBotInfo || null
     }));
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/tutorial-config') {
+    const body = await readJson(req);
+    if (body.tutorialYouTubeId !== undefined) {
+      store.tutorialYouTubeId = (body.tutorialYouTubeId || '').trim();
+      saveStore();
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true, tutorialYouTubeId: store.tutorialYouTubeId }));
   }
 
   if (req.method === 'POST' && url.pathname === '/api/google-config') {

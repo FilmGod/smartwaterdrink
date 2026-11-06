@@ -28,16 +28,27 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=29">
 <link rel="icon" type="image/svg+xml" href="icon.svg?v=29">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=29">
-<link rel="manifest" href="manifest.json?v=29">
+<link rel="manifest" href="manifest.json?v=30">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=29">
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;700&family=Mitr:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=30">
 </head>
 <body>
 
 <!-- ==================== LANDING / GMAIL LOGIN VIEW ==================== -->
 <section id="landingView" class="landing">
+  <svg class="landing-leaves" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <g fill="#BFE6CF" opacity=".55">
+      <path d="M-40 160C60 60 200 50 280 120C200 200 60 230-40 160Z"/>
+      <path d="M1310 760c80-110 210-140 300-80-70 100-200 150-300 80Z"/>
+    </g>
+    <g fill="none" stroke="#9FD6B8" stroke-width="2" opacity=".6">
+      <path d="M-40 160C80 140 180 128 280 120"/>
+      <path d="M1310 760c100-30 200-60 300-80"/>
+    </g>
+    <circle cx="1240" cy="140" r="120" fill="#FFF3C4" opacity=".55"/>
+  </svg>
   <div class="landing-bg" aria-hidden="true">
     <svg viewBox="0 0 1200 120" preserveAspectRatio="none"><path class="l-wave1" d="M0 60Q150 10 300 60T600 60T900 60T1200 60T1500 60T1800 60T2100 60T2400 60V120H0Z"/><path class="l-wave2" d="M0 72Q150 28 300 72T600 72T900 72T1200 72T1500 72T1800 72T2100 72T2400 72V120H0Z"/></svg>
   </div>
@@ -69,29 +80,58 @@
         </span>
         <div class="brand-text-wrap">
           <span class="brand-title-landing">Smart Water Drink</span>
-          <small class="brand-tag-landing">SMART HYDRATION PROJECT</small>
+          <small class="brand-tag-landing">ผู้ช่วยดื่มน้ำเพื่อสุขภาพ</small>
         </div>
       </div>
-      <h1>ดื่มน้ำให้พอดีกับร่างกายคุณในทุกวัน</h1>
-      <p class="landing-sub">คำนวณปริมาณน้ำ BMI พลังงาน และสารอาหารรายวัน พร้อมระบบแจ้งเตือนอัจฉริยะที่เตือนได้แม้ปิดหน้าเว็บ และซิงก์ข้อมูลข้ามเครื่องผ่าน Gmail ของคุณ</p>
 
-      <ul class="feature-list">
-        <li>
-          <span class="f-dot">💧</span>
-          <div><strong>ขวดน้ำจำลองฟิสิกส์เรียลไทม์</strong><span>บันทึกปริมาณน้ำพร้อมแอนิเมชันคลื่นน้ำและสถิติ 7 วันย้อนหลัง</span></div>
-        </li>
-        <li>
-          <span class="f-dot">🔔</span>
-          <div><strong>แจ้งเตือนอัจฉริยะ (Web Push &amp; ปฏิทิน)</strong><span>เตือนเฉพาะตอนที่คุณดื่มช้ากว่าแผน เด้งแจ้งเตือนแม้ปิดแท็บเว็บ</span></div>
-        </li>
-        <li>
-          <span class="f-dot">⚖️</span>
-          <div><strong>คำนวณ BMI &amp; โภชนาการครบถ้วน</strong><span>คำนวณ BMR, TDEE, โปรตีน, คาร์บ, ไขมัน และน้ำตามน้ำหนักตัวจริง</span></div>
-        </li>
+      <h1 class="landing-title">ร่างกายสดชื่น<br>เริ่มจากน้ำแก้วถัดไป</h1>
+      <p class="landing-sub">รู้ว่าวันนี้ร่างกายคุณต้องการน้ำเท่าไร จากน้ำหนัก ส่วนสูง และกิจกรรมที่ทำ แล้วจิบให้ครบตามจังหวะของวัน โดยมี LINE คอยเตือนเบาๆ</p>
+
+      <div class="day-rhythm">
+        <p class="rhythm-head">จังหวะดื่มน้ำใน 1 วัน</p>
+        <ol class="rhythm-list">
+          <li style="--i:0"><time>06:30</time><div><strong>ตื่นนอน</strong><span>น้ำอุ่น 1 แก้ว ปลุกระบบเผาผลาญ</span></div></li>
+          <li style="--i:1"><time>10:00</time><div><strong>ช่วงสาย</strong><span>จิบระหว่างทำงาน ช่วยให้มีสมาธิ</span></div></li>
+          <li style="--i:2"><time>12:00</time><div><strong>ก่อนมื้อเที่ยง</strong><span>1 แก้วก่อนอาหาร ช่วยการย่อย</span></div></li>
+          <li style="--i:3"><time>15:00</time><div><strong>ช่วงบ่าย</strong><span>แก้ง่วง ลดอาการอ่อนล้า</span></div></li>
+          <li style="--i:4"><time>18:30</time><div><strong>หลังออกกำลังกาย</strong><span>ชดเชยน้ำที่เสียไปกับเหงื่อ</span></div></li>
+        </ol>
+      </div>
+
+      <ul class="benefit-chips" aria-label="ประโยชน์ของการดื่มน้ำให้พอ">
+        <li>ผิวชุ่มชื้น</li>
+        <li>สมองแจ่มใส</li>
+        <li>ไตทำงานดี</li>
+        <li>ขับถ่ายคล่อง</li>
       </ul>
     </div>
 
     <div class="login-card" role="region" aria-label="เข้าสู่ระบบด้วย Google">
+      <figure class="infused-glass" aria-hidden="true">
+        <svg viewBox="0 0 220 230">
+          <defs>
+            <clipPath id="glassClip"><path d="M44 34h132l-15 176q-1 12-13 12H72q-12 0-13-12Z"/></clipPath>
+            <linearGradient id="infusedWater" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#BDEBF7"/>
+              <stop offset="1" stop-color="#7FCFEA"/>
+            </linearGradient>
+          </defs>
+          <ellipse cx="110" cy="222" rx="70" ry="6" fill="#CFE9DC"/>
+          <path d="M128 4l26 190" stroke="#3FA772" stroke-width="9" stroke-linecap="round"/>
+          <g clip-path="url(#glassClip)">
+            <g class="glass-fill">
+              <path class="glass-wave" d="M0 80q27-10 55 0t55 0 55 0 55 0 55 0V240H0Z" fill="url(#infusedWater)"/>
+              <g class="cucumber"><circle cx="82" cy="168" r="19" fill="#7DBE5E"/><circle cx="82" cy="168" r="15" fill="#DCF1C6"/><g fill="#B5DB93"><circle cx="78" cy="164" r="1.6"/><circle cx="87" cy="166" r="1.6"/><circle cx="80" cy="173" r="1.6"/><circle cx="86" cy="173" r="1.6"/></g></g>
+              <g class="lemon"><circle cx="136" cy="126" r="25" fill="#F2C443"/><circle cx="136" cy="126" r="20.5" fill="#FCEB9C"/><g stroke="#F2C443" stroke-width="2"><path d="M136 106v40M116 126h40M122 112l28 28M150 112l-28 28"/></g></g>
+              <g class="mint"><path d="M92 112c-16-6-26-20-22-30 14 2 26 14 22 30Z" fill="#3FAE6A"/><path d="M92 112C84 100 78 92 70 82" stroke="#2C8A51" stroke-width="1.5" fill="none"/><path d="M104 196c4-16 18-24 30-20-4 14-16 22-30 20Z" fill="#4BBE77"/></g>
+              <g fill="#fff" class="infuse-bubbles"><circle cx="66" cy="200" r="3"/><circle cx="150" cy="188" r="2.4"/><circle cx="118" cy="206" r="2"/><circle cx="104" cy="150" r="2.6"/></g>
+            </g>
+          </g>
+          <path d="M44 34h132l-15 176q-1 12-13 12H72q-12 0-13-12Z" fill="none" stroke="#A9D9C4" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M60 52l9 140" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".8"/>
+        </svg>
+        <figcaption>ผู้ใหญ่ควรดื่มน้ำราว 30–35 มล. ต่อน้ำหนักตัว 1 กก. ต่อวัน</figcaption>
+      </figure>
       <div class="google-head">
         <svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true">
           <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -100,8 +140,8 @@
           <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
         </svg>
         <div>
-          <h2>เข้าสู่ระบบด้วย Google</h2>
-          <p class="muted">ซิงก์ข้อมูลการดื่มน้ำและโภชนาการของคุณด้วยบัญชี Google</p>
+          <h2>เริ่มดูแลตัวเองวันนี้</h2>
+          <p class="muted">เข้าสู่ระบบด้วย Google เพื่อบันทึกการดื่มน้ำและเป้าหมายสุขภาพของคุณ</p>
         </div>
       </div>
 
@@ -119,6 +159,9 @@
       </button>
 
       <p class="note" style="text-align:center;margin-top:.85rem">ปลอดภัย รวดเร็ว ไม่ต้องตั้งรหัสผ่านใหม่</p>
+      <div style="text-align:center;margin-top:.65rem">
+        <button type="button" id="landingTutorialBtn" class="landing-tutorial-btn">🎬 ชมคลิปวิดีโอแนะนำ &amp; วิธีใช้งาน</button>
+      </div>
       <p id="loginErr" class="login-err" aria-live="polite"></p>
     </div>
   </div>
@@ -221,6 +264,7 @@
     </nav>
 
     <div class="user-bar">
+      <button type="button" id="topTutorialBtn" class="tutorial-top-btn" title="ชมคลิปวิดีโอแนะนำและวิธีใช้งาน">🎬 วิธีใช้งาน</button>
       <button type="button" id="topInstallBtn" class="install-top-btn" hidden title="ติดตั้งแอปลงบนโทรศัพท์">📲 ติดตั้งแอป</button>
       <span id="userAvatar" class="avatar" aria-hidden="true">G</span>
       <div class="user-meta">
@@ -578,6 +622,20 @@
               </div>
 
               <div class="dash-box">
+                <h3>🎥 ตั้งค่าวิดีโอสอนการใช้งาน (YouTube)</h3>
+                <form id="adminTutorialForm" class="fields">
+                  <label>ลิงก์หรือ Video ID ของคลิป YouTube
+                    <input type="text" id="adminTutorialYtInput" placeholder="เช่น https://youtu.be/xxxx หรือ Video ID">
+                  </label>
+                  <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                    <button type="submit" class="primary" style="flex:1">💾 บันทึกลิงก์คลิปวิดีโอ</button>
+                    <button type="button" id="adminPreviewTutorialBtn" class="ghost" style="flex:none">👁️ ทดสอบเปิดดูคลิป</button>
+                  </div>
+                  <p id="adminTutorialStatus" class="note" aria-live="polite"></p>
+                </form>
+              </div>
+
+              <div class="dash-box" style="grid-column:1 / -1">
                 <div class="dash-box-head">
                   <h3>👥 รายชื่อผู้ใช้งานทั้งหมดในระบบ</h3>
                   <input type="search" id="adminSearch" class="admin-search" placeholder="ค้นหาชื่อ / อีเมล...">
@@ -635,8 +693,62 @@
   </div>
 </div>
 
+<!-- ==================== ONBOARDING & VIDEO TUTORIAL MODAL ==================== -->
+<div id="tutorialModal" class="tutorial-modal-backdrop" hidden>
+  <div class="tutorial-modal" role="dialog" aria-modal="true" aria-labelledby="tutorialModalTitle">
+    <button type="button" id="closeTutorialXBtn" class="tutorial-close-x" aria-label="ปิดหน้าต่าง">✕</button>
+
+    <div class="tutorial-header">
+      <div class="tutorial-badge-row">
+        <span class="tutorial-badge">🎬 คู่มือเริ่มต้นใช้งาน</span>
+        <span class="tutorial-badge-sub">Smart Water Drink</span>
+      </div>
+      <h3 id="tutorialModalTitle">ยินดีต้อนรับสู่แอป Smart Water Drink!</h3>
+      <p class="tutorial-sub">ชมคลิปวิดีโอแนะนำและเรียนรู้วิธีดื่มน้ำให้ได้ผลดีที่สุดต่อสุขภาพของคุณ</p>
+    </div>
+
+    <div class="tutorial-video-wrapper">
+      <iframe id="tutorialVideoIframe"
+              src=""
+              title="YouTube video player"
+              frameborder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowfullscreen>
+      </iframe>
+    </div>
+
+    <div class="tutorial-steps">
+      <div class="tutorial-step-item">
+        <span class="step-num">1</span>
+        <div>
+          <strong>คำนวณเป้าหมายน้ำของร่างกาย</strong>
+          <small>ไปที่แท็บ <strong>"⚖️ ร่างกาย"</strong> กรอกน้ำหนัก ส่วนสูง และกิจกรรม เพื่อรับเป้าหมายน้ำและโภชนาการที่พอดี</small>
+        </div>
+      </div>
+      <div class="tutorial-step-item">
+        <span class="step-num">2</span>
+        <div>
+          <strong>เชื่อมต่อ LINE แจ้งเตือน (@943raake)</strong>
+          <small>ไปที่แท็บ <strong>"🔔 แจ้งเตือน"</strong> ผูกบัญชี LINE เพื่อให้ระบบทักเตือนตามจังหวะเวลาที่คุณเลือก</small>
+        </div>
+      </div>
+      <div class="tutorial-step-item">
+        <span class="step-num">3</span>
+        <div>
+          <strong>บันทึกน้ำง่ายๆ ใน 1 แตะ</strong>
+          <small>แตะปุ่ม <strong>+150</strong>, <strong>+250</strong> หรือจิบน้ำจริงแล้วกดบวกผ่านแชต LINE ได้ทันที</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="tutorial-actions">
+      <button type="button" id="startUsingAppBtn" class="primary tutorial-start-btn">🚀 เริ่มต้นดื่มน้ำกันเลย!</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="fx" class="fx" aria-hidden="true"></div>
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>
