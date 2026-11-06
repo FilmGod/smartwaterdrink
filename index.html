@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=25">
+<link rel="stylesheet" href="styles.css?v=26">
 </head>
 <body>
 
@@ -26,8 +26,32 @@
   <div class="landing-inner">
     <div class="landing-pitch">
       <div class="brand-badge">
-        <span class="drop-icon" aria-hidden="true"></span>
-        <span>Smart Water Drink</span>
+        <span class="brand-emblem" aria-hidden="true">
+          <span class="emblem-ring"></span>
+          <svg class="emblem-svg" viewBox="0 0 40 44">
+            <defs>
+              <linearGradient id="dropGradLanding" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#7CE0FF"/>
+                <stop offset=".5" stop-color="#2E9BD6"/>
+                <stop offset="1" stop-color="#0F4C5C"/>
+              </linearGradient>
+              <clipPath id="dropClipLanding">
+                <path d="M20 2C29 14 36 21 36 28A16 16 0 0 1 4 28C4 21 11 14 20 2Z"/>
+              </clipPath>
+            </defs>
+            <path d="M20 2C29 14 36 21 36 28A16 16 0 0 1 4 28C4 21 11 14 20 2Z" fill="url(#dropGradLanding)"/>
+            <g clip-path="url(#dropClipLanding)">
+              <path class="emblem-wave" d="M-20 27Q-10 23 0 27T20 27T40 27T60 27V46H-20Z" fill="#9BE7FF" opacity=".55"/>
+              <circle class="emblem-bub b1" cx="16" cy="34" r="2" fill="#fff" opacity=".75"/>
+              <circle class="emblem-bub b2" cx="25" cy="37" r="1.5" fill="#fff" opacity=".65"/>
+            </g>
+            <path d="M13 21C11 25 11 30 14 34" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".7"/>
+          </svg>
+        </span>
+        <div class="brand-text-wrap">
+          <span class="brand-title-landing">Smart Water Drink</span>
+          <small class="brand-tag-landing">SMART HYDRATION PROJECT</small>
+        </div>
       </div>
       <h1>ดื่มน้ำให้พอดีกับร่างกายคุณในทุกวัน</h1>
       <p class="landing-sub">คำนวณปริมาณน้ำ BMI พลังงาน และสารอาหารรายวัน พร้อมระบบแจ้งเตือนอัจฉริยะที่เตือนได้แม้ปิดหน้าเว็บ และซิงก์ข้อมูลข้ามเครื่องผ่าน Gmail ของคุณ</p>
@@ -137,7 +161,36 @@
 <!-- ==================== MAIN APP VIEW (SLIDING CATEGORIES) ==================== -->
 <div id="appView" class="app-shell" hidden>
   <header class="top">
-    <strong class="brand">Smart Water Drink</strong>
+    <div class="brand" id="brandLogo" role="button" tabindex="0" title="Smart Water Drink – กลับหน้าหลัก">
+      <span class="brand-emblem" aria-hidden="true">
+        <span class="emblem-ring"></span>
+        <span class="emblem-ring r2"></span>
+        <svg class="emblem-svg" viewBox="0 0 40 44">
+          <defs>
+            <linearGradient id="dropGradTop" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#67D8FF"/>
+              <stop offset=".55" stop-color="#2E9BD6"/>
+              <stop offset="1" stop-color="#0F4C5C"/>
+            </linearGradient>
+            <clipPath id="dropClipTop">
+              <path d="M20 2C29 14 36 21 36 28A16 16 0 0 1 4 28C4 21 11 14 20 2Z"/>
+            </clipPath>
+          </defs>
+          <path d="M20 2C29 14 36 21 36 28A16 16 0 0 1 4 28C4 21 11 14 20 2Z" fill="url(#dropGradTop)"/>
+          <g clip-path="url(#dropClipTop)">
+            <path class="emblem-wave" d="M-20 26Q-10 22 0 26T20 26T40 26T60 26V46H-20Z" fill="#8CE4FF" opacity=".6"/>
+            <path class="emblem-wave w2" d="M-20 29Q-10 33 0 29T20 29T40 29T60 29V46H-20Z" fill="#fff" opacity=".35"/>
+            <circle class="emblem-bub b1" cx="15" cy="35" r="2.1" fill="#fff" opacity=".8"/>
+            <circle class="emblem-bub b2" cx="24" cy="38" r="1.6" fill="#fff" opacity=".7"/>
+          </g>
+          <path d="M13 21C11 25 11 30 14 34" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".78"/>
+        </svg>
+      </span>
+      <div class="brand-text">
+        <strong class="brand-name">Smart Water Drink</strong>
+        <span class="brand-sub"><i class="brand-live-dot"></i>SMART HYDRATION PROJECT</span>
+      </div>
+    </div>
 
     <nav class="cat-tabs" aria-label="หมวดหมู่หลัก" style="--tab-idx:0;--tab-count:4">
       <span class="tab-pill" aria-hidden="true"></span>
@@ -565,6 +618,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="fx" class="fx" aria-hidden="true"></div>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>

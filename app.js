@@ -108,6 +108,14 @@
     }
   }
   tabBtns.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+  if ($('brandLogo')) {
+    $('brandLogo').addEventListener('click', e => {
+      switchTab(0);
+      const r = e.currentTarget.getBoundingClientRect();
+      burst(r.left + r.width / 2, r.top + r.height / 2, 18);
+      playSloshSound(0.6);
+    });
+  }
 
   // Swipe left/right support on touch devices
   let touchX = null, touchY = null;
