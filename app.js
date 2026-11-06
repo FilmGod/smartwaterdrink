@@ -20,6 +20,11 @@
           state: { profile: state.profile, goal: state.goal, logs: state.logs, rem: state.rem }
         })
       }).then(r => r.json()).then(d => {
+        if (d?.linkedLineUserId && state.rem.lineUserId !== d.linkedLineUserId) {
+          state.rem.lineUserId = d.linkedLineUserId;
+          localStorage.setItem(KEY, JSON.stringify(state));
+          renderLineLinkState();
+        }
         if (d?.pendingLineOps?.length) applyPendingLineOps(d.pendingLineOps);
       }).catch(() => {});
     }
@@ -786,40 +791,52 @@
     });
   }
 
+  let lineSettingsExpanded = false;
+  function renderLineLinkState() {
+    const isLinked = !!(state.rem?.lineUserId);
+    const linkedBanner = $('lineLinkedBanner');
+    const unlinkedBox = $('lineUnlinkedBox');
+    const settingsBody = $('lineSettingsBody');
+    const toggleBtn = $('toggleLineSettingsBtn');
+    const linkedSub = $('lineLinkedSub');
+
+    if (linkedBanner) linkedBanner.hidden = !isLinked;
+    if (unlinkedBox) unlinkedBox.hidden = isLinked;
+    if (linkedSub && state.user?.email) {
+      linkedSub.textContent = `ผูกกับ ${state.user.email} • แจ้งเตือนผ่าน @943raake`;
+    }
+    if (toggleBtn) {
+      toggleBtn.hidden = !isLinked;
+      toggleBtn.textContent = lineSettingsExpanded ? '⚙️ ซ่อนตั้งค่า ▴' : '⚙️ ปรับแต่งการ์ด ▾';
+    }
+    if (settingsBody) {
+      settingsBody.hidden = isLinked && !lineSettingsExpanded;
+    }
+  }
+  if ($('toggleLineSettingsBtn')) {
+    $('toggleLineSettingsBtn').onclick = () => {
+      lineSettingsExpanded = !lineSettingsExpanded;
+      renderLineLinkState();
+    };
+  }
+
   $('remForm').onsubmit = async e => {
     e.preventDefault();
     Object.assign(state.rem, {
-      on: $('remOn').checked, wake: $('wake').value, sleep: $('sleep').value,
+      on: false,
+      wake: $('wake').value,
+      sleep: $('sleep').value,
       glass: Math.max(100, +$('glass').value || 250),
       lineOn: $('lineOn').checked,
       nightSummaryOn: $('nightSummaryOn') ? $('nightSummaryOn').checked : true,
       tone: $('remTone') ? $('remTone').value : 'health',
-      customMsg: $('remCustomMsg') ? $('remCustomMsg').value.trim() : '',
-      lineToken: $('lineToken').value.trim(),
-      lineUserId: $('lineUserId').value.trim()
+      customMsg: $('remCustomMsg') ? $('remCustomMsg').value.trim() : ''
     });
     save();
     const msg = $('remMsg');
-    const parts = [];
-    if (state.rem.on) {
-      if (!('Notification' in window)) parts.push('เบราว์เซอร์ไม่รองรับ Web Push');
-      else {
-        const p = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
-        if (p === 'granted') {
-          const ok = await syncPush();
-          parts.push(ok ? 'เปิด Web Push สำเร็จ' : 'เปิดแจ้งเตือนเบราว์เซอร์สำเร็จ');
-          notify('เปิดระบบแจ้งเตือนดื่มน้ำเรียบร้อยแล้ว');
-        } else {
-          parts.push('เบราว์เซอร์ปิดกั้นสิทธิ์แจ้งเตือน');
-        }
-      }
-    } else {
-      await syncPush();
-    }
-    if (state.rem.lineOn) {
-      parts.push('เปิดแจ้งเตือน LINE (@943raake) แล้ว');
-    }
-    msg.textContent = parts.length ? parts.join(' • ') : 'บันทึกการตั้งค่าแล้ว';
+    msg.textContent = state.rem.lineOn
+      ? 'บันทึกตารางเวลาและเปิดแจ้งเตือน LINE (@943raake) แล้ว'
+      : 'บันทึกการตั้งค่าแล้ว';
     toast('บันทึกการตั้งค่าแจ้งเตือนแล้ว');
     render();
   };
@@ -841,21 +858,12 @@
     const btn = mode === 'summary' ? $('testSummaryLineBtn') : $('testLineBtn');
     const origText = btn ? btn.textContent : '';
     const msg = $('remMsg');
-    const lineToken = $('lineToken').value.trim();
-    const lineUserId = $('lineUserId').value.trim();
-    if (!lineToken && !serverHasLineToken) {
-      msg.textContent = 'กรุณาวาง LINE Channel Access Token ก่อนกดทดสอบ';
-      toast('กรุณาใส่ LINE Channel Access Token');
-      $('lineToken').focus();
-      return;
-    }
     Object.assign(state.rem, {
+      on: false,
       lineOn: true,
       nightSummaryOn: $('nightSummaryOn') ? $('nightSummaryOn').checked : true,
       tone: $('remTone') ? $('remTone').value : 'health',
-      customMsg: $('remCustomMsg') ? $('remCustomMsg').value.trim() : '',
-      lineToken,
-      lineUserId
+      customMsg: $('remCustomMsg') ? $('remCustomMsg').value.trim() : ''
     });
     $('lineOn').checked = true;
     save();
@@ -863,7 +871,6 @@
       btn.disabled = true;
       btn.textContent = 'กำลังส่งเข้า LINE...';
     }
-    // Compute 7-day stats for summary card
     let sum7 = 0, streak7 = 0;
     for (let i = 0; i < 7; i++) {
       const dt = new Date(); dt.setDate(dt.getDate() - i);
@@ -877,8 +884,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lineToken,
-          lineUserId,
+          lineUserId: state.rem.lineUserId || '',
           glass: state.rem.glass || 250,
           consumed: total(),
           goal: state.goal,
@@ -903,7 +909,7 @@
           : 'ส่งการ์ดเตือนดื่มน้ำพร้อมปุ่มลัด Quick Reply เข้า LINE สำเร็จแล้ว!';
         toast('ส่งเข้า LINE สำเร็จแล้ว!');
       } else {
-        msg.textContent = `ส่งเข้า LINE ไม่สำเร็จ: ${data.error || 'ตรวจสอบ Token อีกครั้ง'}`;
+        msg.textContent = `ส่งเข้า LINE ไม่สำเร็จ: ${data.error || 'ตรวจสอบการแอดเพื่อนบอทอีกครั้ง'}`;
         toast('ส่งเข้า LINE ไม่สำเร็จ');
       }
     } catch (_) {
@@ -916,42 +922,6 @@
   }
   $('testLineBtn').onclick = () => sendTestLineCard('auto');
   if ($('testSummaryLineBtn')) $('testSummaryLineBtn').onclick = () => sendTestLineCard('summary');
-
-  $('testPushBtn').onclick = async () => {
-    const btn = $('testPushBtn'), msg = $('remMsg');
-    if (!('Notification' in window)) {
-      msg.textContent = 'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน';
-      return;
-    }
-    const p = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
-    if (p !== 'granted') {
-      msg.textContent = 'กรุณาอนุญาตสิทธิ์การแจ้งเตือนของเบราว์เซอร์ก่อนทดสอบ';
-      return;
-    }
-    await syncPush();
-    if (pushSub) {
-      await fetch('/api/test-push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: pushSub, delayMs: 5000 })
-      }).catch(() => {});
-    } else {
-      setTimeout(() => notify('ทดสอบแจ้งเตือนดื่มน้ำ (ครบ 5 วินาที)'), 5000);
-    }
-    let sec = 5;
-    btn.disabled = true;
-    msg.textContent = 'กำลังส่ง Web Push ในอีก 5 วินาที — ลองพับหน้าจอหรือปิดแท็บเว็บตอนนี้ได้เลย!';
-    const tId = setInterval(() => {
-      sec--;
-      if (sec > 0) btn.textContent = `จะแจ้งเตือนใน ${sec} วิ...`;
-      else {
-        clearInterval(tId);
-        btn.disabled = false;
-        btn.textContent = 'ทดสอบเตือนในอีก 5 วิ (ลองพับ/ปิดเว็บดูได้)';
-        msg.textContent = 'ส่งแจ้งเตือน Web Push แล้ว! กดปุ่ม "+มล. (ดื่มแล้ว)" บนแจ้งเตือนได้เลย';
-      }
-    }, 1000);
-  };
 
   $('icsBtn').onclick = () => {
     const list = slots();
@@ -1174,15 +1144,13 @@
       showResults(defP, calc(defP), false);
     }
     $('wake').value = state.rem.wake; $('sleep').value = state.rem.sleep;
-    $('glass').value = state.rem.glass; $('remOn').checked = state.rem.on;
-    $('lineOn').checked = !!state.rem.lineOn;
+    $('glass').value = state.rem.glass;
+    state.rem.on = false;
+    $('lineOn').checked = state.rem.lineOn !== false;
     if ($('nightSummaryOn')) $('nightSummaryOn').checked = state.rem.nightSummaryOn !== false;
     if ($('remTone')) $('remTone').value = state.rem.tone || 'health';
     if ($('remCustomMsg')) $('remCustomMsg').value = state.rem.customMsg || '';
-    $('lineToken').value = state.rem.lineToken || '';
-    $('lineUserId').value = state.rem.lineUserId || '';
-    const wh = $('webhookUrlText');
-    if (wh) wh.textContent = `${location.origin}/api/line-webhook`;
+    renderLineLinkState();
     render();
   }
 
@@ -1286,7 +1254,13 @@
     try {
       const res = await fetch(`/api/user-state?email=${encodeURIComponent(state.user.email)}`);
       if (res.ok) {
-        const { data, pendingLineOps } = await res.json();
+        const { data, pendingLineOps, linkedLineUserId } = await res.json();
+        const uid = linkedLineUserId || data?.rem?.lineUserId || '';
+        if (uid && state.rem.lineUserId !== uid) {
+          state.rem.lineUserId = uid;
+          localStorage.setItem(KEY, JSON.stringify(state));
+          renderLineLinkState();
+        }
         if (!data) {
           // Server restarted or doesn't have our user record yet -> push local state
           save();

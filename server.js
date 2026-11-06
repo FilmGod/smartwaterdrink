@@ -595,12 +595,24 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
 
   if (url.pathname === '/api/user-state') {
     store.users ||= {};
+    store.lineLinks ||= {};
     store.pendingGlobalLineOps ||= [];
     if (req.method === 'GET') {
       const email = (url.searchParams.get('email') || '').toLowerCase().trim();
       const u = store.users[email] || null;
       let pendingLineOps = [];
+      let linkedLineUserId = '';
       if (u) {
+        u.rem ||= { on: false, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 };
+        if (!u.rem.lineUserId) {
+          const foundUid = Object.keys(store.lineLinks).find(k => store.lineLinks[k] === email);
+          if (foundUid) u.rem.lineUserId = foundUid;
+          else if (store.lastLineUserId && Object.keys(store.users).length === 1) {
+            u.rem.lineUserId = store.lastLineUserId;
+            store.lineLinks[store.lastLineUserId] = email;
+          }
+        }
+        linkedLineUserId = u.rem.lineUserId || '';
         if (store.pendingGlobalLineOps.length) {
           u.pendingLineOps = (u.pendingLineOps || []).concat(store.pendingGlobalLineOps);
           for (const op of store.pendingGlobalLineOps) {
@@ -620,17 +632,26 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
         saveStore();
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ ok: true, data: u, pendingLineOps }));
+      return res.end(JSON.stringify({ ok: true, data: u, pendingLineOps, linkedLineUserId }));
     }
     if (req.method === 'POST') {
       const body = await readJson(req);
       const email = (body.email || '').toLowerCase().trim();
       let pendingLineOps = [];
+      let linkedLineUserId = '';
       if (email && body.state) {
         const prev = store.users[email] || {};
+        const prevLineUid = prev.rem?.lineUserId ||
+          Object.keys(store.lineLinks).find(k => store.lineLinks[k] === email) ||
+          (store.lastLineUserId && Object.keys(store.users).length <= 1 ? store.lastLineUserId : '') || '';
         pendingLineOps = (prev.pendingLineOps || []).concat(store.pendingGlobalLineOps || []);
         store.pendingGlobalLineOps = [];
         const mergedState = Object.assign({}, body.state);
+        mergedState.rem = Object.assign({}, prev.rem || {}, body.state.rem || {});
+        if (prevLineUid && !mergedState.rem.lineUserId) {
+          mergedState.rem.lineUserId = prevLineUid;
+        }
+        linkedLineUserId = mergedState.rem.lineUserId || '';
         if (pendingLineOps.length) {
           mergedState.logs = Object.assign({}, body.state.logs || {});
           for (const op of pendingLineOps) {
@@ -648,7 +669,7 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
         saveStore();
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ ok: true, pendingLineOps }));
+      return res.end(JSON.stringify({ ok: true, pendingLineOps, linkedLineUserId }));
     }
   }
 

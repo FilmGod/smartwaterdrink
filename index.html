@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=21">
+<link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
 
@@ -232,59 +232,69 @@
         <div class="panel-card band tint">
           <div class="col">
             <h2>แจ้งเตือนให้ดื่มน้ำ</h2>
-            <p class="lead">กระจายเวลาเตือนตามเวลาที่คุณตื่นอยู่ และเตือนเฉพาะตอนที่ดื่มช้ากว่าแผน รองรับทั้ง <strong>Web Push</strong>, <strong>แชต LINE</strong> และ <strong>ปฏิทิน (.ics)</strong></p>
+            <p class="lead">กระจายเวลาเตือนตามเวลาที่คุณตื่นอยู่ และเตือนเฉพาะตอนที่ดื่มช้ากว่าแผนผ่าน <strong>แชต LINE (@943raake)</strong></p>
             <div class="slots-box">
               <p class="muted">ตารางเวลาเตือนวันนี้</p>
               <ol id="slots" class="slots" aria-label="เวลาที่จะเตือน"></ol>
             </div>
 
-            <div class="line-card">
-              <div class="line-head">
-                <span class="line-badge">LINE</span>
-                <strong>แจ้งเตือนผ่านแชต LINE (@943raake)</strong>
-              </div>
-              <div id="lineBotBanner" class="line-bot-banner">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;background:#e7faef;padding:.6rem .85rem;border-radius:10px;border:1px solid #06C755">
-                  <div><strong style="color:#058538">บอท: Smart Water Drink (@943raake)</strong><br><small class="muted">แอดเพื่อนเพื่อรับการ์ดแจ้งเตือนดื่มน้ำเข้า LINE</small></div>
-                  <a href="https://line.me/R/ti/p/%40943raake" target="_blank" rel="noopener" style="background:#06C755;color:#fff;text-decoration:none;padding:.4rem .85rem;border-radius:99px;font-weight:700;font-size:.86rem">+ เพิ่มเพื่อน LINE</a>
+            <div class="line-card" id="lineCardBox">
+              <div class="line-head" style="justify-content:space-between;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:.55rem">
+                  <span class="line-badge">LINE</span>
+                  <strong>แจ้งเตือนผ่านแชต LINE (@943raake)</strong>
                 </div>
-              </div>
-              <label class="check"><input type="checkbox" id="lineOn" checked> เปิดส่งแจ้งเตือนเข้า LINE</label>
-              <label class="check"><input type="checkbox" id="nightSummaryOn" checked> ส่งการ์ดสรุปผลประจำวันอัตโนมัติก่อนนอน</label>
-
-              <div class="fields" style="margin-top:.2rem">
-                <label>สไตล์คำพูดแจ้งเตือนของบอท
-                  <select id="remTone">
-                    <option value="health">🩺 สายสุขภาพ (ข้อมูลดูแลร่างกาย)</option>
-                    <option value="cheer">💖 สายให้กำลังใจ (อบอุ่น อ่อนโยน)</option>
-                    <option value="fun">😎 สายฮา / กวนๆ (ขำๆ กระตุ้นให้ดื่ม)</option>
-                    <option value="strict">🔥 สายโค้ชฟิตเนส (เข้มข้น จริงจัง)</option>
-                  </select>
-                </label>
-                <label>ข้อความเตือนตัวเองท้ายการ์ด <small class="muted">(เว้นว่างได้)</small>
-                  <input type="text" id="remCustomMsg" placeholder="เช่น อย่าลืมกินวิตามินหลังดื่มน้ำนะ!">
-                </label>
+                <button type="button" id="toggleLineSettingsBtn" class="mini-pill" hidden>⚙️ ปรับแต่งการ์ด ▾</button>
               </div>
 
-              <div class="add">
-                <button type="button" id="testLineBtn" class="line-btn">💬 ส่งการ์ดเตือนเข้า LINE ทันที</button>
-                <button type="button" id="testSummaryLineBtn" class="line-btn">🌙 ทดสอบการ์ดสรุปก่อนนอน</button>
-              </div>
-              <p class="note" style="background:#f2fbf6;padding:.45rem .65rem;border-radius:8px;border:1px dashed #86efac">
-                💡 <strong>ผูกบัญชี LINE อัตโนมัติ:</strong> พิมพ์อีเมลของคุณลงในแชตบอท <strong>@943raake</strong> ครั้งเดียว เพื่อให้ปุ่มกดใน LINE (<code>+150</code>, <code>+250</code>, <code>+500</code>, <code>สถานะ</code>, <code>สรุป</code>, <code>ยกเลิก</code>) ซิงก์เข้าบัญชีของคุณโดยตรง!
-              </p>
-              <details class="line-help">
-                <summary>ตั้งค่าขั้นสูง (เปลี่ยน Token / ระบุ LINE User ID)</summary>
-                <div class="fields" style="margin-top:.6rem">
-                  <label>LINE Channel Access Token <small class="muted">(เชื่อมต่อกับ @943raake อัตโนมัติแล้ว เว้นว่างได้)</small>
-                    <input type="password" id="lineToken" placeholder="ใช้ Token ของเซิร์ฟเวอร์อัตโนมัติ" autocomplete="off">
-                  </label>
-                  <label>LINE User ID <small class="muted">(เว้นว่างได้ ระบบจะส่งเข้าเพื่อนทุกคนของบอท)</small>
-                    <input type="text" id="lineUserId" placeholder="เช่น U123456... (เว้นว่างได้)">
-                  </label>
-                  <p class="note">Webhook URL: <code id="webhookUrlText">/api/line-webhook</code></p>
+              <!-- Compact Linked State (shown when user has linked LINE) -->
+              <div id="lineLinkedBanner" hidden style="display:flex;align-items:center;justify-content:space-between;gap:.65rem;flex-wrap:wrap;background:#e7faef;padding:.65rem .9rem;border-radius:12px;border:1.5px solid #06C755">
+                <div style="display:flex;align-items:center;gap:.6rem">
+                  <span style="width:28px;height:28px;border-radius:50%;background:#06C755;color:#fff;display:grid;place-items:center;font-weight:700;font-size:.9rem;flex:none">✓</span>
+                  <div>
+                    <strong style="color:#058538;font-size:.94rem">คุณผูกบัญชี LINE เรียบร้อยแล้ว</strong>
+                    <small id="lineLinkedSub" class="muted" style="display:block;font-size:.8rem">ซิงก์การแจ้งเตือนและปุ่มกดกับ @943raake อัตโนมัติ</small>
+                  </div>
                 </div>
-              </details>
+              </div>
+
+              <!-- Unlinked Onboarding State (shown before user links LINE) -->
+              <div id="lineUnlinkedBox" style="display:grid;gap:.65rem">
+                <div id="lineBotBanner" class="line-bot-banner">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;background:#e7faef;padding:.6rem .85rem;border-radius:10px;border:1px solid #06C755">
+                    <div><strong style="color:#058538">บอท: Smart Water Drink (@943raake)</strong><br><small class="muted">แอดเพื่อนเพื่อรับการ์ดแจ้งเตือนดื่มน้ำเข้า LINE</small></div>
+                    <a href="https://line.me/R/ti/p/%40943raake" target="_blank" rel="noopener" style="background:#06C755;color:#fff;text-decoration:none;padding:.4rem .85rem;border-radius:99px;font-weight:700;font-size:.86rem">+ เพิ่มเพื่อน LINE</a>
+                  </div>
+                </div>
+                <p class="note" style="background:#f2fbf6;padding:.5rem .7rem;border-radius:8px;border:1px dashed #86efac">
+                  💡 <strong>วิธีผูกบัญชี LINE:</strong> กดเพิ่มเพื่อนแล้วพิมพ์อีเมลของคุณลงในแชตบอท <strong>@943raake</strong> ครั้งเดียว หน้านี้จะย่อเป็นสถานะผูกบัญชีเรียบร้อยอัตโนมัติ!
+                </p>
+              </div>
+
+              <!-- Collapsible LINE Customization Settings -->
+              <div id="lineSettingsBody" style="display:grid;gap:.7rem">
+                <label class="check"><input type="checkbox" id="lineOn" checked> เปิดส่งแจ้งเตือนเข้า LINE</label>
+                <label class="check"><input type="checkbox" id="nightSummaryOn" checked> ส่งการ์ดสรุปผลประจำวันอัตโนมัติก่อนนอน</label>
+
+                <div class="fields" style="margin-top:.1rem">
+                  <label>สไตล์คำพูดแจ้งเตือนของบอท
+                    <select id="remTone">
+                      <option value="health">🩺 สายสุขภาพ (ข้อมูลดูแลร่างกาย)</option>
+                      <option value="cheer">💖 สายให้กำลังใจ (อบอุ่น อ่อนโยน)</option>
+                      <option value="fun">😎 สายฮา / กวนๆ (ขำๆ กระตุ้นให้ดื่ม)</option>
+                      <option value="strict">🔥 สายโค้ชฟิตเนส (เข้มข้น จริงจัง)</option>
+                    </select>
+                  </label>
+                  <label>ข้อความเตือนตัวเองท้ายการ์ด <small class="muted">(เว้นว่างได้)</small>
+                    <input type="text" id="remCustomMsg" placeholder="เช่น อย่าลืมกินวิตามินหลังดื่มน้ำนะ!">
+                  </label>
+                </div>
+
+                <div class="add">
+                  <button type="button" id="testLineBtn" class="line-btn">💬 ส่งการ์ดเตือนเข้า LINE ทันที</button>
+                  <button type="button" id="testSummaryLineBtn" class="line-btn">🌙 ทดสอบการ์ดสรุปก่อนนอน</button>
+                </div>
+              </div>
             </div>
           </div>
           <form id="remForm" class="col fields">
@@ -293,10 +303,8 @@
               <label>เวลานอน <input type="time" id="sleep" value="22:00"></label>
             </div>
             <label>ขนาดแก้ว (มล.) <input type="number" id="glass" value="250" min="100" max="1000" step="50"></label>
-            <label class="check"><input type="checkbox" id="remOn"> เปิดการแจ้งเตือนเบื้องหลัง (Web Push)</label>
             <button class="primary" type="submit">บันทึกการตั้งค่าแจ้งเตือนทั้งหมด</button>
             <div class="add">
-              <button type="button" id="testPushBtn">ทดสอบ Web Push ใน 5 วิ</button>
               <button type="button" id="icsBtn">ส่งออกเข้าปฏิทิน (.ics)</button>
             </div>
             <p id="remMsg" class="note" aria-live="polite"></p>
@@ -519,6 +527,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="fx" class="fx" aria-hidden="true"></div>
-<script src="app.js?v=21"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>
