@@ -135,6 +135,144 @@
   const drops = []; // airborne splash droplets above surface
   let curY = BOTTOM, targetY = BOTTOM, velY = 0;
   let sloshAngle = 0, sloshVel = 0, agitation = 0;
+  let tiltTarget = 0, lastGamma = null, tiltActive = false;
+  let soundOn = localStorage.getItem('swd.sound') !== '0';
+
+  /* ---------- Web Audio API: Realistic Water Pour & Slosh Sound ---------- */
+  let audioCtx = null;
+  function getAudio() {
+    if (!soundOn) return null;
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function playSloshSound(power = 0.5) {
+    const ctx = getAudio();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const count = Math.max(2, Math.round(2 + power * 3));
+    for (let i = 0; i < count; i++) {
+      const t0 = now + i * 0.055 + Math.random() * 0.03;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const baseF = 300 + Math.random() * 260;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(baseF, t0);
+      osc.frequency.exponentialRampToValueAtTime(baseF * 1.65, t0 + 0.06);
+      gain.gain.setValueAtTime(0.001, t0);
+      gain.gain.linearRampToValueAtTime(0.055 * power, t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.065);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.07);
+    }
+  }
+
+  function playPourSound(ml, fBefore, fAfter) {
+    const ctx = getAudio();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Duration scales realistically with poured volume (ml): ~0.62s for 150ml, ~0.95s for 250ml, ~1.55s for 500ml
+    const dur = Math.min(2.3, Math.max(0.48, 0.32 + (ml / 250) * 0.62));
+    const intensity = Math.min(1.35, Math.max(0.65, ml / 250));
+
+    // 1. Turbulent stream + Helmholtz bottle cavity resonance (pitch rises as bottle fills!)
+    const bufLen = Math.ceil(ctx.sampleRate * dur);
+    const noiseBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = noiseBuf.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0;
+    for (let i = 0; i < bufLen; i++) {
+      const white = Math.random() * 2 - 1;
+      // Soft pink-ish filtering for natural liquid turbulence
+      b0 = 0.997 * b0 + white * 0.029;
+      b1 = 0.985 * b1 + white * 0.032;
+      b2 = 0.950 * b2 + white * 0.048;
+      // Rhythmic glug-glug modulation
+      const glug = 0.78 + 0.22 * Math.sin((i / ctx.sampleRate) * Math.PI * 2 * 11.5);
+      data[i] = (b0 + b1 + b2 + white * 0.04) * glug;
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuf;
+
+    // Bandpass 1: Bottle air-cavity resonance rising with water fill level (fBefore -> fAfter)
+    const cavFilter = ctx.createBiquadFilter();
+    cavFilter.type = 'bandpass';
+    cavFilter.Q.setValueAtTime(5.2, now);
+    const fStart = 290 + fBefore * 420;
+    const fEnd = Math.max(fStart + 45, 340 + fAfter * 580);
+    cavFilter.frequency.setValueAtTime(fStart, now);
+    cavFilter.frequency.exponentialRampToValueAtTime(fEnd, now + dur);
+
+    // Bandpass 2: Upper splashy stream hiss
+    const splashFilter = ctx.createBiquadFilter();
+    splashFilter.type = 'bandpass';
+    splashFilter.Q.setValueAtTime(1.8, now);
+    splashFilter.frequency.setValueAtTime(1050, now);
+    splashFilter.frequency.linearRampToValueAtTime(1450, now + dur);
+
+    const streamGain = ctx.createGain();
+    streamGain.gain.setValueAtTime(0.001, now);
+    streamGain.gain.linearRampToValueAtTime(0.24 * intensity, now + 0.09);
+    streamGain.gain.setValueAtTime(0.22 * intensity, now + Math.max(0.12, dur - 0.14));
+    streamGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+    noise.connect(cavFilter);
+    noise.connect(splashFilter);
+    cavFilter.connect(streamGain);
+    splashFilter.connect(streamGain);
+    streamGain.connect(ctx.destination);
+    noise.start(now);
+    noise.stop(now + dur + 0.02);
+
+    // 2. Individual acoustic bubble "bloop / glug" droplets (count scales with ml!)
+    const numBubbles = Math.min(24, Math.max(5, Math.round(ml / 28)));
+    for (let i = 0; i < numBubbles; i++) {
+      const prog = i / Math.max(1, numBubbles - 1);
+      const t0 = now + 0.07 + prog * (dur - 0.14) + (Math.random() - 0.5) * 0.03;
+      const fillNow = fBefore + (fAfter - fBefore) * prog;
+      const baseF = 330 + fillNow * 440 + (Math.random() - 0.35) * 150;
+      const bDur = 0.045 + Math.random() * 0.035;
+
+      const osc = ctx.createOscillator();
+      const bGain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(baseF, t0);
+      // Characteristic upward pitch chirp of an underwater air bubble detaching
+      osc.frequency.exponentialRampToValueAtTime(baseF * (1.58 + Math.random() * 0.25), t0 + bDur);
+
+      const peak = (0.045 + Math.random() * 0.04) * intensity;
+      bGain.gain.setValueAtTime(0.0008, t0);
+      bGain.gain.linearRampToValueAtTime(peak, t0 + 0.01);
+      bGain.gain.exponentialRampToValueAtTime(0.0008, t0 + bDur);
+
+      osc.connect(bGain).connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + bDur + 0.01);
+    }
+
+    // 3. Celebratory crystal water chime when reaching 100% daily goal
+    if (fBefore < 1 && fAfter >= 1) {
+      [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+        const tC = now + dur * 0.75 + idx * 0.09;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, tC);
+        g.gain.setValueAtTime(0.001, tC);
+        g.gain.linearRampToValueAtTime(0.11, tC + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0008, tC + 0.45);
+        osc.connect(g).connect(ctx.destination);
+        osc.start(tC);
+        osc.stop(tC + 0.46);
+      });
+    }
+  }
 
   function pluck(centerIdx, strength, radius = 4) {
     for (let i = 0; i < N; i++) {
@@ -204,9 +342,9 @@
     if (Math.abs(dy) < 0.15 && Math.abs(velY) < 0.05) curY = targetY;
     wEl.style.transform = `translateY(${curY.toFixed(2)}px)`;
 
-    // Whole-surface lateral slosh pendulum
-    const sloshAcc = -0.042 * sloshAngle;
-    sloshVel = (sloshVel + sloshAcc) * 0.965;
+    // Whole-surface lateral slosh pendulum (oscillates around phone's real gravity tiltTarget)
+    const sloshAcc = -0.046 * (sloshAngle - tiltTarget);
+    sloshVel = (sloshVel + sloshAcc) * 0.955;
     sloshAngle += sloshVel;
     agitation *= 0.985;
 
@@ -221,7 +359,7 @@
         Math.sin(t * 3.8 + u * Math.PI * 5.0) * (0.8 + agitation * 2.5);
       // Meniscus slight upward curve at glass walls + slosh tilt
       const wall = Math.pow(Math.abs(u - 0.5) * 2, 4) * -2.5;
-      const tilt = (u - 0.5) * sloshAngle * 38;
+      const tilt = (u - 0.5) * sloshAngle * 52;
       const rest = idle + wall + tilt;
 
       const force = -k * (sp[i].y - rest);
@@ -248,14 +386,17 @@
     }
     for (let i = 0; i < N; i++) sp[i].y += sp[i].v;
 
-    // Build 3 layered wave paths (front, mid, back) for 3D volumetric depth
+    // Build 3 layered wave paths (front, mid, back) sharing the gravity tilt for realistic tilted water
     const frontPts = [], midPts = [], backPts = [];
     for (let i = 0; i < N; i++) {
       const x = X0 + i * DX;
       const u = i / (N - 1);
+      const tiltHere = (u - 0.5) * sloshAngle * 52;
+      const mirrorTilt = ((1 - u) - 0.5) * sloshAngle * 52;
+      const mirrorWave = sp[N - 1 - i].y - mirrorTilt;
       const yF = sp[i].y;
-      const yM = -sp[N - 1 - i].y * 0.7 - 5.5 + Math.sin(t * 2.6 - u * 5) * 2.8;
-      const yB = sp[N - 1 - i].y * 0.5 - 10 + Math.cos(t * 1.9 + u * 4) * 3.2;
+      const yM = tiltHere - mirrorWave * 0.7 - 5.5 + Math.sin(t * 2.6 - u * 5) * 2.8;
+      const yB = tiltHere + mirrorWave * 0.5 - 10 + Math.cos(t * 1.9 + u * 4) * 3.2;
       frontPts.push([x, yF]);
       midPts.push([x, yM]);
       backPts.push([x, yB]);
@@ -300,6 +441,7 @@
     pluck(idx, 9, 5);
     sloshVel += (relX - 0.5) * 0.35;
     spawnSplash(X0 + idx * DX, 0.55);
+    playSloshSound(0.6);
     replay(bottleSvg, 'wobble');
   });
   let lastHoverT = 0;
@@ -313,6 +455,101 @@
     pluck(idx, (e.movementX ? Math.min(4, Math.abs(e.movementX) * 0.25) : 1.8), 3);
     sloshVel += Math.max(-0.08, Math.min(0.08, (e.movementX || 0) * 0.004));
   });
+
+  /* ---------- Real-time Phone Tilt & Shake (DeviceOrientation / DeviceMotion) ---------- */
+  const tiltBtn = $('tiltBtn');
+  const soundToggleBtn = $('soundToggleBtn');
+
+  function updateSoundBtn() {
+    if (!soundToggleBtn) return;
+    soundToggleBtn.classList.toggle('active', soundOn);
+    soundToggleBtn.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+    soundToggleBtn.textContent = soundOn ? '🔊 เสียงน้ำ: เปิด' : '🔇 เสียงน้ำ: ปิด';
+  }
+  updateSoundBtn();
+  if (soundToggleBtn) {
+    soundToggleBtn.onclick = () => {
+      soundOn = !soundOn;
+      localStorage.setItem('swd.sound', soundOn ? '1' : '0');
+      updateSoundBtn();
+      if (soundOn) playSloshSound(0.5);
+    };
+  }
+
+  function handleOrientation(e) {
+    if (e.gamma === null || e.gamma === undefined) return;
+    const g = Math.max(-65, Math.min(65, e.gamma));
+    if (!tiltActive && Math.abs(g) > 0.2) {
+      tiltActive = true;
+      if (tiltBtn) tiltBtn.classList.add('active');
+    }
+    // Opposite sign so water surface stays horizontal with Earth gravity when phone tilts
+    const nextTarget = -g / 20;
+    if (lastGamma !== null) {
+      const dg = g - lastGamma;
+      if (Math.abs(dg) > 0.35) {
+        sloshVel += (-dg / 20) * 0.16;
+        if (Math.abs(dg) > 2.4) {
+          const sideIdx = dg > 0 ? Math.floor(N * 0.25) : Math.floor(N * 0.75);
+          pluck(sideIdx, Math.min(8, Math.abs(dg) * 0.55), 4);
+        }
+      }
+    }
+    lastGamma = g;
+    tiltTarget = nextTarget;
+    if (tiltBtn && Math.abs(g) > 1) {
+      tiltBtn.textContent = `📱 เอียง ${Math.round(Math.abs(g))}°`;
+    } else if (tiltBtn && tiltActive) {
+      tiltBtn.textContent = '📱 ตั้งตรง 0°';
+    }
+  }
+
+  let lastShakeT = 0;
+  function handleMotion(e) {
+    const acc = e.acceleration || e.accelerationIncludingGravity;
+    if (!acc) return;
+    const ax = acc.x || 0;
+    if (Math.abs(ax) > 3.5) {
+      sloshVel += Math.max(-0.22, Math.min(0.22, ax * 0.015));
+      const now = performance.now();
+      if (Math.abs(ax) > 10 && now - lastShakeT > 340) {
+        lastShakeT = now;
+        const idx = Math.floor(N * (0.25 + Math.random() * 0.5));
+        pluck(idx, 11, 5);
+        spawnSplash(X0 + idx * DX, 0.75);
+        playSloshSound(0.55);
+      }
+    }
+  }
+
+  let motionSubscribed = false;
+  async function enableDeviceTilt(fromBtn = false) {
+    try {
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const p = await DeviceOrientationEvent.requestPermission();
+        if (p !== 'granted') return;
+      }
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        try { await DeviceMotionEvent.requestPermission(); } catch (_) {}
+      }
+    } catch (_) {}
+    if (!motionSubscribed) {
+      motionSubscribed = true;
+      window.addEventListener('deviceorientation', handleOrientation, true);
+      window.addEventListener('devicemotion', handleMotion, true);
+    }
+    if (fromBtn) {
+      // Demo slosh on tap + confirm sensor active
+      sloshVel += (Math.random() > 0.5 ? 1 : -1) * 0.45;
+      pluck(Math.floor(N / 2), 9, 5);
+      playSloshSound(0.5);
+      if (tiltBtn) tiltBtn.classList.add('active');
+      toast('เปิดเซนเซอร์เอียงน้ำตามมือถือแล้ว ลองเอียงหรือเขย่าเครื่องดูครับ!');
+    }
+  }
+  enableDeviceTilt(false);
+  document.addEventListener('pointerdown', () => enableDeviceTilt(false), { once: true });
+  if (tiltBtn) tiltBtn.onclick = () => enableDeviceTilt(true);
 
   let lastStatus = '';
   function render() {
@@ -370,41 +607,43 @@
 
   function dropInto(fBefore, fAfter, ml, done) {
     const drop = $('drop'), stream = $('stream'), ySurf = level(fBefore);
+    playPourSound(ml, fBefore, fAfter);
     if (calm || !drop.animate) return done();
-    const power = Math.min(1.4, Math.max(0.6, ml / 250));
+    const power = Math.min(1.5, Math.max(0.6, ml / 250));
+    const pourMs = Math.round(Math.min(1800, Math.max(520, 380 + (ml / 250) * 520)));
     const mid = Math.floor(N / 2);
 
     // 1. Pouring stream & leading drop fall from mouth of bottle to water surface
     stream.setAttribute('height', Math.max(0, ySurf + 12));
     stream.animate([
       { opacity: 0, transform: 'scaleX(.4)' },
-      { opacity: .85, transform: 'scaleX(1.1)', offset: .25 },
-      { opacity: .8, transform: 'scaleX(.9)', offset: .75 },
+      { opacity: .88, transform: `scaleX(${(0.95 + power * 0.22).toFixed(2)})`, offset: .2 },
+      { opacity: .82, transform: 'scaleX(.9)', offset: .8 },
       { opacity: 0, transform: 'scaleX(.2)' }
-    ], { duration: 680, easing: 'ease-out' });
+    ], { duration: pourMs, easing: 'ease-out' });
 
     drop.animate([
       { transform: 'translateY(0) scale(.6)', opacity: 0 },
       { transform: 'translateY(10px) scale(1)', opacity: 1, offset: .18 },
       { transform: `translateY(${ySurf + 30}px) scale(.75,1.25)`, opacity: 1 }
-    ], { duration: 420, easing: 'cubic-bezier(.55,0,1,.45)' }).onfinish = () => {
+    ], { duration: 360, easing: 'cubic-bezier(.55,0,1,.45)' }).onfinish = () => {
       // 2. Impact! Depress center springs, trigger slosh, splash droplets & bubbles
       pluck(mid, 14 * power, 5);
-      sloshVel += (Math.random() > 0.5 ? 1 : -1) * 0.24 * power;
+      sloshVel += (Math.random() > 0.5 ? 1 : -1) * 0.26 * power;
       spawnSplash(100, power);
       done();
 
-      // Continuous pouring agitation pulses while stream finishes
-      let pulses = 3;
+      // Continuous pouring agitation pulses scaled to pour volume
+      let pulses = Math.max(2, Math.round(ml / 85));
       const pTimer = setInterval(() => {
         pluck(mid + Math.round((Math.random() - 0.5) * 4), 6 * power, 4);
         if (--pulses <= 0) clearInterval(pTimer);
-      }, 110);
+      }, 105);
 
       $('ripple').animate([
         { transform: 'scale(.12)', opacity: .95 },
         { transform: 'scale(1.15)', opacity: 0 }
-      ], { duration: 850, easing: 'ease-out' });
+      ], { duration: pourMs, easing: 'ease-out' });
       replay(bottleSvg, 'wobble');
     };
   }

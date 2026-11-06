@@ -116,6 +116,9 @@ h3{margin:1.2rem 0 .4rem;font-weight:600;color:var(--lagoon);font-size:1.05rem}
 .bottle-wrap::before{content:"";position:absolute;inset:15% 5% 5%;background:radial-gradient(closest-side,rgba(46,155,214,.28),transparent);filter:blur(20px);z-index:0;animation:breathe 7s ease-in-out infinite}
 @keyframes breathe{50%{transform:scale(1.08);opacity:.7}}
 .bottle{position:relative;z-index:1;width:100%;height:auto;max-height:62vh;display:block;overflow:visible;cursor:pointer;transform-origin:50% 85%}
+.bottle-controls{position:relative;z-index:2;display:flex;justify-content:center;gap:.4rem;margin-top:.55rem;flex-wrap:wrap}
+.mini-pill{padding:.26rem .65rem;font-size:.74rem;border-width:1.5px;border-color:var(--line);background:var(--foam);color:#4d6a72;font-weight:600;white-space:nowrap}
+.mini-pill.active{border-color:var(--water);background:var(--tint);color:var(--lagoon)}
 .bottle.wobble{animation:wobble .85s var(--ease-out)}
 @keyframes wobble{18%{transform:rotate(-2.2deg)}42%{transform:rotate(1.8deg)}68%{transform:rotate(-.9deg)}88%{transform:rotate(.4deg)}}
 .glass{fill:rgba(189,230,240,.28);stroke:var(--lagoon);stroke-width:5}
