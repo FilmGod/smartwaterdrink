@@ -70,6 +70,8 @@
   });
 
   /* ---------- sliding category tabs ---------- */
+  const ADMIN_EMAIL = 'ponlasit3210@gmail.com';
+  const isAdminUser = () => (state.user?.email || '').trim().toLowerCase() === ADMIN_EMAIL;
   const catNav = document.querySelector('.cat-tabs');
   const slidesTrack = $('slidesTrack');
   const tabBtns = [...document.querySelectorAll('.tab-btn')];
@@ -77,7 +79,8 @@
   let curTab = 0;
 
   function switchTab(idx) {
-    idx = Math.max(0, Math.min(panels.length - 1, +idx || 0));
+    const maxIdx = isAdminUser() ? panels.length - 1 : panels.length - 2;
+    idx = Math.max(0, Math.min(maxIdx, +idx || 0));
     curTab = idx;
     catNav.style.setProperty('--tab-idx', idx);
     slidesTrack.style.setProperty('--tab-idx', idx);
@@ -92,7 +95,7 @@
       sloshVel += 0.12;
     } else if (idx === 3) {
       renderUserDashboard();
-    } else if (idx === 4) {
+    } else if (idx === 4 && isAdminUser()) {
       checkAdminAccess();
     }
   }
@@ -821,6 +824,13 @@
     localStorage.setItem(ACC_KEY, JSON.stringify(list.slice(0, 4)));
   }
 
+  function removeSavedAccount(email) {
+    const list = getSavedAccounts().filter(a => a.email !== email);
+    localStorage.setItem(ACC_KEY, JSON.stringify(list));
+    renderSavedAccounts();
+    toast('ลบบัญชีออกจากรายการแล้ว');
+  }
+
   function renderSavedAccounts() {
     const list = getSavedAccounts();
     const box = $('savedAccounts');
@@ -836,14 +846,23 @@
             ? `<img src="${a.picture}" alt="" class="g-acc-ava" style="object-fit:cover">`
             : `<span class="g-acc-ava">${init}</span>`;
           return `
-            <button type="button" class="g-acc-row" data-email="${a.email}" data-name="${a.name || ''}" data-pic="${a.picture || ''}">
-              ${ava}
-              <div><strong>${disp}</strong><small>${a.email}</small></div>
-            </button>
+            <div class="g-acc-item">
+              <button type="button" class="g-acc-row" data-email="${a.email}" data-name="${a.name || ''}" data-pic="${a.picture || ''}">
+                ${ava}
+                <div><strong>${disp}</strong><small>${a.email}</small></div>
+              </button>
+              <button type="button" class="acc-del-btn" data-del-acc="${a.email}" title="ลบบัญชีนี้" aria-label="ลบบัญชีนี้">✕</button>
+            </div>
           `;
         }).join('');
         modalList.querySelectorAll('.g-acc-row').forEach(btn => {
           btn.onclick = () => loginWithGmail(btn.dataset.email, btn.dataset.name, btn.dataset.pic);
+        });
+        modalList.querySelectorAll('[data-del-acc]').forEach(btn => {
+          btn.onclick = e => {
+            e.stopPropagation();
+            removeSavedAccount(btn.dataset.delAcc);
+          };
         });
         if (anotherBtn && form) {
           anotherBtn.hidden = false;
@@ -866,13 +885,22 @@
     }
     box.hidden = false;
     box.innerHTML = `<p class="muted">เลือกบัญชี Google ของคุณ</p>` + list.map(a => `
-      <button type="button" class="acc-chip" data-email="${a.email}" data-name="${a.name || ''}" data-pic="${a.picture || ''}">
-        <div><strong>${a.name || a.email.split('@')[0]}</strong><small>${a.email}</small></div>
-        <span>เข้าใช้ →</span>
-      </button>
+      <div class="acc-item-wrap">
+        <button type="button" class="acc-chip" data-email="${a.email}" data-name="${a.name || ''}" data-pic="${a.picture || ''}">
+          <div><strong>${a.name || a.email.split('@')[0]}</strong><small>${a.email}</small></div>
+          <span>เข้าใช้ →</span>
+        </button>
+        <button type="button" class="acc-del-btn" data-del-acc="${a.email}" title="ลบบัญชีนี้" aria-label="ลบบัญชีนี้">✕</button>
+      </div>
     `).join('');
     box.querySelectorAll('.acc-chip').forEach(btn => {
       btn.onclick = () => loginWithGmail(btn.dataset.email, btn.dataset.name, btn.dataset.pic);
+    });
+    box.querySelectorAll('[data-del-acc]').forEach(btn => {
+      btn.onclick = e => {
+        e.stopPropagation();
+        removeSavedAccount(btn.dataset.delAcc);
+      };
     });
   }
 
@@ -950,6 +978,10 @@
     } else {
       ava.textContent = (state.user.name || state.user.email)[0].toUpperCase();
     }
+    const isAdmin = isAdminUser();
+    if (tabBtns[4]) tabBtns[4].hidden = !isAdmin;
+    catNav.style.setProperty('--tab-count', isAdmin ? 5 : 4);
+    if (!isAdmin && curTab === 4) switchTab(0);
     applyStateToUI();
   }
 
@@ -1170,8 +1202,7 @@
   let adminUsersCache = [];
 
   function checkAdminAccess() {
-    const isOwner = /^(admin|filmgod)/i.test(state.user?.email || '');
-    if (adminUnlocked || isOwner) {
+    if (isAdminUser()) {
       adminUnlocked = true;
       $('adminGate').hidden = true;
       $('adminContent').hidden = false;
