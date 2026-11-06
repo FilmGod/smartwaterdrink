@@ -1,4 +1,16 @@
-const C = 'swd-v28', FILES = ['./', 'index.html', 'styles.css?v=28', 'app.js?v=28', 'icon.svg', 'icon-512.png'];
+const C = 'swd-v29', FILES = [
+  './',
+  'index.html',
+  'styles.css?v=29',
+  'app.js?v=29',
+  'manifest.json?v=29',
+  'icon.svg',
+  'icon-192.png',
+  'icon-512.png',
+  'apple-touch-icon.png',
+  'icon-maskable-192.png',
+  'icon-maskable-512.png'
+];
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c => c.addAll(FILES)));
