@@ -1766,7 +1766,7 @@
   }
 
   /* ---------- Tutorial Video & Onboarding Modal ---------- */
-  let activeTutorialYouTubeId = localStorage.getItem('swd.tutorialVideoId') || '31wW7l9sM04';
+  let activeTutorialYouTubeId = localStorage.getItem('swd.tutorialVideoId') || '4kwqAYfVGio';
   const tutorialModal = $('tutorialModal');
   const tutorialVideoIframe = $('tutorialVideoIframe');
   const closeTutorialXBtn = $('closeTutorialXBtn');

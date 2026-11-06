@@ -14,6 +14,7 @@ const DEFAULT_VAPID = {
 function sanitizeStore(s) {
   s.users ||= {};
   s.lineLinks ||= {};
+  s.tutorialYouTubeId = '4kwqAYfVGio';
   // Disconnect boomsiwat1669 from FilmXr01's LINE user ID
   if (s.users['boomsiwat1669@gmail.com']?.rem?.lineUserId === 'Ue38075cfc9536aab575d8ab47ec0ecbb') {
     delete s.users['boomsiwat1669@gmail.com'].rem.lineUserId;
@@ -637,7 +638,7 @@ const server = http.createServer(async (req, res) => {
   }
 
 const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-68q2lvjmg79807hc12ltmk5rcat6560l.apps.googleusercontent.com';
-const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '31wW7l9sM04';
+const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '4kwqAYfVGio';
 
   if (req.method === 'GET' && url.pathname === '/api/vapid-public-key') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
