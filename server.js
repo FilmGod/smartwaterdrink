@@ -356,12 +356,105 @@ const server = http.createServer(async (req, res) => {
       const body = await readJson(req);
       const email = (body.email || '').toLowerCase().trim();
       if (email && body.state) {
-        store.users[email] = Object.assign(store.users[email] || {}, body.state, { updatedAt: Date.now() });
+        store.users[email] = Object.assign(store.users[email] || {}, body.state, {
+          email,
+          name: body.name || store.users[email]?.name || email.split('@')[0],
+          updatedAt: Date.now()
+        });
         saveStore();
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true }));
     }
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/overview') {
+    const d = todayStr();
+    const usersObj = store.users || {};
+    const usersList = Object.entries(usersObj).map(([email, u]) => {
+      const todayLogs = u.logs?.[d] || [];
+      const todayMl = todayLogs.reduce((a, b) => a + b, 0);
+      let weekMl = 0;
+      for (let i = 0; i < 7; i++) {
+        const dt = new Date();
+        dt.setDate(dt.getDate() - i);
+        const k = dt.toLocaleDateString('sv');
+        weekMl += (u.logs?.[k] || []).reduce((a, b) => a + b, 0);
+      }
+      const p = u.profile;
+      const bmi = p && p.height ? +(p.weight / Math.pow(p.height / 100, 2)).toFixed(1) : null;
+      return {
+        email,
+        name: u.name || email.split('@')[0],
+        goal: u.goal || 2000,
+        todayMl,
+        todayCount: todayLogs.length,
+        weekAvg: Math.round(weekMl / 7),
+        bmi,
+        weight: p?.weight || null,
+        height: p?.height || null,
+        aim: p?.aim || null,
+        pushOn: !!u.rem?.on,
+        lineOn: !!u.rem?.lineOn,
+        updatedAt: u.updatedAt || null
+      };
+    }).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    const pushClientsCount = Object.values(store.clients || {}).filter(c => c.subscription && c.rem?.on).length;
+    const totalTodayMl = usersList.reduce((s, u) => s + u.todayMl, 0);
+    const goalMetCount = usersList.filter(u => u.todayMl >= u.goal).length;
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      ok: true,
+      serverTime: new Date().toISOString(),
+      today: d,
+      uptimeSec: Math.round(process.uptime()),
+      totalUsers: usersList.length,
+      pushClientsCount,
+      totalTodayMl,
+      goalMetCount,
+      lineBotInfo: store.lineBotInfo || { displayName: 'Smart Water Drink', basicId: '@943raake' },
+      users: usersList
+    }));
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/broadcast') {
+    const data = await readJson(req);
+    const text = (data.message || '💧 แจ้งเตือนจากผู้ดูแลระบบ: อย่าลืมดื่มน้ำให้ครบเป้าหมายวันนี้นะครับ!').trim();
+    let pushSent = 0;
+    for (const [id, c] of Object.entries(store.clients || {})) {
+      if (c.subscription) {
+        const ok = await sendPush(id, c, {
+          title: '📢 ประกาศจาก Smart Water Drink',
+          body: text,
+          glass: c.rem?.glass || 250,
+          clientId: id
+        });
+        if (ok) pushSent++;
+      }
+    }
+    const lineRes = await sendLineMessage({
+      token: store.defaultLineToken,
+      userId: data.lineUserId || '',
+      text: `📢 ประกาศ: ${text}`,
+      glass: 250,
+      consumed: 1000,
+      goal: 2000
+    });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true, pushSent, lineOk: lineRes.ok }));
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/delete-user') {
+    const data = await readJson(req);
+    const email = (data.email || '').toLowerCase().trim();
+    if (email && store.users?.[email]) {
+      delete store.users[email];
+      saveStore();
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true }));
   }
 
   if (req.method === 'POST' && url.pathname === '/api/sync') {

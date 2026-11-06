@@ -16,6 +16,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: state.user.email,
+          name: state.user.name || state.user.email.split('@')[0],
           state: { profile: state.profile, goal: state.goal, logs: state.logs, rem: state.rem }
         })
       }).catch(() => {});
@@ -89,6 +90,10 @@
       // Gentle slosh when sliding back to the bottle tab
       pluck(Math.floor(N / 2), 4, 4);
       sloshVel += 0.12;
+    } else if (idx === 3) {
+      renderUserDashboard();
+    } else if (idx === 4) {
+      checkAdminAccess();
     }
   }
   tabBtns.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
@@ -333,7 +338,7 @@
       if (lastStatus) replay(st, 'swap');
       lastStatus = txt;
     }
-    renderWeek(); renderSlots();
+    renderWeek(); renderSlots(); renderUserDashboard();
   }
 
   let weekSig = '';
@@ -936,6 +941,201 @@
       window.google.accounts.id.renderButton(wrap, { theme: 'outline', size: 'large', shape: 'pill' });
     }
   }).catch(() => {});
+
+  /* ---------- User Dashboard ---------- */
+  function renderUserDashboard() {
+    if (!$('uKpiToday')) return;
+    const t = total(), g = state.goal || 2000;
+    const pct = Math.round((t / g) * 100);
+    $('uKpiToday').textContent = `${pct}%`;
+    $('uKpiTodaySub').textContent = `${r0(t)} / ${r0(g)} มล.`;
+
+    // 14-day history & 7-day average
+    const days14 = [];
+    let sum7 = 0, hit14 = 0;
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const k = d.toLocaleDateString('sv');
+      const v = (state.logs[k] || []).reduce((a, b) => a + b, 0);
+      if (i < 7) sum7 += v;
+      if (v >= g) hit14++;
+      days14.push({ d, k, v });
+    }
+    const avg7 = Math.round(sum7 / 7);
+    $('uKpiAvg').textContent = `${r0(avg7)} มล.`;
+    $('uKpiAvgSub').textContent = avg7 >= g ? 'ถึงเป้าหมายเฉลี่ยรายวัน!' : `ต่ำกว่าเป้าเฉลี่ย ${r0(g - avg7)} มล.`;
+    $('uKpiStreak').textContent = `${hit14} วัน`;
+    $('uKpiStreakSub').textContent = `จาก 14 วันล่าสุด (${Math.round(hit14 / 14 * 100)}%)`;
+
+    if (state.profile) {
+      const r = calc(state.profile);
+      const [cat] = bmiInfo(r.bmi);
+      $('uKpiBmi').textContent = `${r.bmi.toFixed(1)} (${cat})`;
+      $('uKpiBmiSub').textContent = `พลังงานเป้าหมาย ${r0(r.kcal)} kcal/วัน`;
+    } else {
+      $('uKpiBmi').textContent = 'ยังไม่ระบุ';
+      $('uKpiBmiSub').textContent = 'คำนวณในหมวดร่างกาย';
+    }
+
+    // 14-day bar chart
+    const maxVal = Math.max(g, ...days14.map(x => x.v), 100);
+    $('chart14').innerHTML = days14.map(x => {
+      const h = Math.max(4, Math.round((x.v / maxVal) * 105));
+      const hit = x.v >= g;
+      const lbl = x.d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+      return `<div class="c-col" title="${lbl}: ${r0(x.v)} มล.">
+        <span class="c-val">${x.v ? (x.v >= 1000 ? (x.v / 1000).toFixed(1) + 'L' : x.v) : ''}</span>
+        <div class="c-bar ${hit ? 'hit' : ''}" style="height:${h}px"></div>
+        <span>${x.d.getDate()}</span>
+      </div>`;
+    }).join('');
+
+    // Today's cup-by-cup timeline
+    const list = dayLog();
+    $('uLogCount').textContent = `${list.length} แก้ว (${r0(t)} มล.)`;
+    const tl = $('todayTimeline');
+    if (!list.length) {
+      tl.innerHTML = `<li class="muted">วันนี้ยังไม่มีบันทึกการดื่มน้ำ กดปุ่ม +มล. ในหมวด "วันนี้" ได้เลย</li>`;
+    } else {
+      let running = 0;
+      tl.innerHTML = list.map((ml, idx) => {
+        running += ml;
+        return `<li>
+          <span>แก้วที่ ${idx + 1}: <strong>+${ml} มล.</strong></span>
+          <span class="muted">สะสม ${r0(running)} มล.</span>
+        </li>`;
+      }).reverse().join('');
+    }
+  }
+
+  $('exportCsvBtn').onclick = () => {
+    const rows = [['Date', 'Total_ml', 'Goal_ml', 'Glasses_Count', 'Status']];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const k = d.toLocaleDateString('sv');
+      const arr = state.logs[k] || [];
+      const sum = arr.reduce((a, b) => a + b, 0);
+      rows.push([k, sum, state.goal, arr.length, sum >= state.goal ? 'Met' : 'Below']);
+    }
+    const csv = '\uFEFF' + rows.map(r => r.join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `smart-water-log-${today()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('ดาวน์โหลดไฟล์ CSV เรียบร้อยแล้ว');
+  };
+
+  /* ---------- Admin Dashboard ---------- */
+  let adminUnlocked = sessionStorage.getItem('swd.admin') === '1';
+  let adminUsersCache = [];
+
+  function checkAdminAccess() {
+    const isOwner = /^(admin|filmgod)/i.test(state.user?.email || '');
+    if (adminUnlocked || isOwner) {
+      adminUnlocked = true;
+      $('adminGate').hidden = true;
+      $('adminContent').hidden = false;
+      loadAdminDashboard();
+    } else {
+      $('adminGate').hidden = false;
+      $('adminContent').hidden = true;
+    }
+  }
+
+  $('adminAuthForm').onsubmit = e => {
+    e.preventDefault();
+    const pass = $('adminPass').value.trim();
+    if (pass === 'admin1234' || pass === '1234' || pass === 'admin') {
+      adminUnlocked = true;
+      sessionStorage.setItem('swd.admin', '1');
+      $('adminAuthMsg').textContent = '';
+      checkAdminAccess();
+      toast('เข้าสู่โหมดผู้ดูแลระบบแล้ว');
+    } else {
+      $('adminAuthMsg').textContent = 'รหัสผ่านไม่ถูกต้อง (ค่าเริ่มต้นคือ admin1234)';
+    }
+  };
+
+  async function loadAdminDashboard() {
+    try {
+      const res = await fetch('/api/admin/overview');
+      if (!res.ok) return;
+      const data = await res.json();
+      $('aKpiUsers').textContent = `${data.totalUsers} คน`;
+      $('aKpiMet').textContent = `${data.goalMetCount} / ${data.totalUsers} คน`;
+      $('aKpiMetSub').textContent = `น้ำรวมวันนี้ ${r0(data.totalTodayMl)} มล.`;
+      $('aKpiPush').textContent = `${data.pushClientsCount} เครื่อง`;
+      $('aKpiBot').textContent = data.lineBotInfo?.basicId || '@943raake';
+      const minsUp = Math.max(1, Math.round((data.uptimeSec || 60) / 60));
+      $('aKpiUptime').textContent = `ออนไลน์ • Uptime ${minsUp} นาที`;
+      adminUsersCache = data.users || [];
+      renderAdminTable();
+    } catch (_) {}
+  }
+
+  function renderAdminTable() {
+    const q = ($('adminSearch')?.value || '').trim().toLowerCase();
+    const list = adminUsersCache.filter(u =>
+      !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+    );
+    const tbody = $('adminUsersBody');
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="muted">ยังไม่มีข้อมูลผู้ใช้งานที่ตรงกับการค้นหา</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(u => {
+      const pct = Math.min(100, Math.round((u.todayMl / Math.max(1, u.goal)) * 100));
+      const badges = [
+        u.lineOn ? '<span class="badge ok">LINE</span>' : '',
+        u.pushOn ? '<span class="badge">Push</span>' : ''
+      ].filter(Boolean).join(' ') || '<span class="muted">ปิด</span>';
+      return `<tr>
+        <td><strong>${u.name}</strong><br><small class="muted">${u.email}</small></td>
+        <td><strong>${r0(u.todayMl)}</strong> / ${r0(u.goal)} มล. <small>(${pct}%)</small></td>
+        <td>${r0(u.weekAvg)} มล./วัน</td>
+        <td>${u.bmi ? u.bmi : '–'}</td>
+        <td>${badges}</td>
+        <td><button type="button" class="mini-btn" data-del="${u.email}">ลบ</button></td>
+      </tr>`;
+    }).join('');
+    tbody.querySelectorAll('[data-del]').forEach(btn => {
+      btn.onclick = async () => {
+        await fetch('/api/admin/delete-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: btn.dataset.del })
+        });
+        toast(`ลบผู้ใช้ ${btn.dataset.del} แล้ว`);
+        loadAdminDashboard();
+      };
+    });
+  }
+
+  $('adminSearch').oninput = renderAdminTable;
+  $('refreshAdminBtn').onclick = () => { loadAdminDashboard(); toast('รีเฟรชข้อมูลแอดมินแล้ว'); };
+
+  $('broadcastForm').onsubmit = async e => {
+    e.preventDefault();
+    const message = $('broadcastMsg').value.trim();
+    if (!message) return;
+    const st = $('broadcastStatus');
+    st.textContent = 'กำลังส่งประกาศแจ้งเตือน...';
+    try {
+      const res = await fetch('/api/admin/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
+      const data = await res.json();
+      st.textContent = `ส่งประกาศสำเร็จ! (LINE: ${data.lineOk ? 'ส่งแล้ว' : 'ไม่สำเร็จ'}, Web Push: ${data.pushSent || 0} เครื่อง)`;
+      $('broadcastMsg').value = '';
+      toast('ส่งประกาศหาผู้ใช้ทุกคนแล้ว');
+    } catch (_) {
+      st.textContent = 'เกิดข้อผิดพลาดในการส่งประกาศ';
+    }
+  };
 
   /* ---------- init ---------- */
   enterApp();

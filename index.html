@@ -88,11 +88,13 @@
   <header class="top">
     <strong class="brand">Smart Water Drink</strong>
 
-    <nav class="cat-tabs" aria-label="หมวดหมู่หลัก" style="--tab-idx:0">
+    <nav class="cat-tabs" aria-label="หมวดหมู่หลัก" style="--tab-idx:0;--tab-count:5">
       <span class="tab-pill" aria-hidden="true"></span>
       <button type="button" class="tab-btn active" data-tab="0" aria-selected="true">💧 วันนี้</button>
       <button type="button" class="tab-btn" data-tab="1" aria-selected="false">🔔 แจ้งเตือน</button>
       <button type="button" class="tab-btn" data-tab="2" aria-selected="false">⚖️ ร่างกาย</button>
+      <button type="button" class="tab-btn" data-tab="3" aria-selected="false">📊 แดชบอร์ด</button>
+      <button type="button" class="tab-btn" data-tab="4" aria-selected="false">🛡️ แอดมิน</button>
     </nav>
 
     <div class="user-bar">
@@ -294,6 +296,147 @@
               <thead><tr><th scope="col">สารอาหาร</th><th scope="col">ปริมาณ</th><th scope="col">ที่มา</th></tr></thead>
               <tbody id="macroBody"></tbody>
             </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 3: USER DASHBOARD (แดชบอร์ดผู้ใช้) -->
+      <section class="slide-panel" data-panel="3" aria-label="แดชบอร์ดข้อมูลของคุณ">
+        <div class="panel-card dash-wrap">
+          <div class="dash-head">
+            <div>
+              <h2>แดชบอร์ดสุขภาพและการดื่มน้ำของคุณ</h2>
+              <p class="muted">สรุปสถิติการดื่มน้ำ แนวโน้ม 14 วัน และประวัติการดื่มรายแก้ว</p>
+            </div>
+            <button type="button" id="exportCsvBtn">⬇️ ดาวน์โหลด CSV</button>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <span class="kpi-label">ความสำเร็จวันนี้</span>
+              <strong class="kpi-val" id="uKpiToday">0%</strong>
+              <small id="uKpiTodaySub">0 / 2,000 มล.</small>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">เฉลี่ย 7 วันล่าสุด</span>
+              <strong class="kpi-val" id="uKpiAvg">0 มล.</strong>
+              <small id="uKpiAvgSub">เทียบเป้าหมายรายวัน</small>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">วันที่ดื่มครบเป้า</span>
+              <strong class="kpi-val" id="uKpiStreak">0 วัน</strong>
+              <small id="uKpiStreakSub">ในรอบ 14 วันที่ผ่านมา</small>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">ดัชนีมวลกาย &amp; พลังงาน</span>
+              <strong class="kpi-val" id="uKpiBmi">–</strong>
+              <small id="uKpiBmiSub">คำนวณในหมวดร่างกาย</small>
+            </div>
+          </div>
+
+          <div class="dash-cols">
+            <div class="dash-box">
+              <div class="dash-box-head">
+                <h3>แนวโน้มการดื่มน้ำ 14 วันย้อนหลัง</h3>
+                <span class="legend"><i class="lg-hit"></i> ครบเป้า <i class="lg-miss"></i> ยังไม่ครบ</span>
+              </div>
+              <div id="chart14" class="chart14" aria-label="กราฟ 14 วันย้อนหลัง"></div>
+            </div>
+
+            <div class="dash-box">
+              <div class="dash-box-head">
+                <h3>บันทึกการดื่มวันนี้ (รายแก้ว)</h3>
+                <span class="muted" id="uLogCount">0 รายการ</span>
+              </div>
+              <ul id="todayTimeline" class="timeline-list"></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 4: ADMIN DASHBOARD (แดชบอร์ดผู้ดูแลระบบ) -->
+      <section class="slide-panel" data-panel="4" aria-label="แดชบอร์ดผู้ดูแลระบบ">
+        <div class="panel-card dash-wrap">
+          <div id="adminGate" class="admin-gate">
+            <h2>🛡️ เข้าสู่โหมดผู้ดูแลระบบ (Admin Dashboard)</h2>
+            <p class="muted">กรอกรหัสผ่านผู้ดูแลระบบเพื่อดูสถิติผู้ใช้ทั้งหมดและส่งประกาศแจ้งเตือนผ่าน LINE / Web Push</p>
+            <form id="adminAuthForm" class="inline">
+              <label>รหัสผ่านแอดมิน
+                <input type="password" id="adminPass" placeholder="ค่าเริ่มต้น: admin1234" required>
+              </label>
+              <button type="submit" class="primary">ปลดล็อกแดชบอร์ดแอดมิน</button>
+            </form>
+            <p id="adminAuthMsg" class="login-err"></p>
+          </div>
+
+          <div id="adminContent" hidden>
+            <div class="dash-head">
+              <div>
+                <h2>🛡️ แดชบอร์ดผู้ดูแลระบบ (Admin Overview)</h2>
+                <p class="muted">ติดตามข้อมูลผู้ใช้ทั้งหมดในระบบ สถานะบอท LINE (@943raake) และส่งประกาศแจ้งเตือน</p>
+              </div>
+              <div class="add">
+                <button type="button" id="refreshAdminBtn">🔄 รีเฟรชข้อมูล</button>
+              </div>
+            </div>
+
+            <div class="kpi-grid">
+              <div class="kpi-card admin-kpi">
+                <span class="kpi-label">ผู้ใช้งานทั้งหมด</span>
+                <strong class="kpi-val" id="aKpiUsers">0 คน</strong>
+                <small id="aKpiUsersSub">ซิงก์ข้อมูลในระบบ</small>
+              </div>
+              <div class="kpi-card admin-kpi">
+                <span class="kpi-label">ดื่มครบเป้าวันนี้</span>
+                <strong class="kpi-val" id="aKpiMet">0 คน</strong>
+                <small id="aKpiMetSub">ปริมาณรวม 0 มล.</small>
+              </div>
+              <div class="kpi-card admin-kpi">
+                <span class="kpi-label">เปิดรับแจ้งเตือน</span>
+                <strong class="kpi-val" id="aKpiPush">0 เครื่อง</strong>
+                <small id="aKpiPushSub">Web Push &amp; LINE OA</small>
+              </div>
+              <div class="kpi-card admin-kpi">
+                <span class="kpi-label">สถานะบอท LINE</span>
+                <strong class="kpi-val" id="aKpiBot">@943raake</strong>
+                <small id="aKpiUptime">ออนไลน์ปกติ</small>
+              </div>
+            </div>
+
+            <div class="dash-cols admin-cols">
+              <div class="dash-box">
+                <h3>📢 ส่งประกาศแจ้งเตือนหาทุกคน (LINE + Web Push)</h3>
+                <form id="broadcastForm" class="fields">
+                  <label>ข้อความประกาศ / กระตุ้นการดื่มน้ำ
+                    <input type="text" id="broadcastMsg" placeholder="เช่น 💧 บ่ายแล้ว อย่าลืมพักสายตาและจิบน้ำสักแก้วนะครับ!" required>
+                  </label>
+                  <button type="submit" class="primary">ส่งแจ้งเตือนเข้า LINE &amp; Web Push ทันที</button>
+                  <p id="broadcastStatus" class="note" aria-live="polite"></p>
+                </form>
+              </div>
+
+              <div class="dash-box">
+                <div class="dash-box-head">
+                  <h3>👥 รายชื่อผู้ใช้งานทั้งหมดในระบบ</h3>
+                  <input type="search" id="adminSearch" class="admin-search" placeholder="ค้นหาชื่อ / อีเมล...">
+                </div>
+                <div class="table-scroll">
+                  <table class="macros admin-table">
+                    <thead>
+                      <tr>
+                        <th>ผู้ใช้งาน</th>
+                        <th>ดื่มวันนี้</th>
+                        <th>เฉลี่ย 7 วัน</th>
+                        <th>BMI</th>
+                        <th>แจ้งเตือน</th>
+                        <th>จัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminUsersBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
