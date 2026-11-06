@@ -325,6 +325,10 @@ function readJson(req) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  if (req.method === 'GET' && url.pathname === '/') {
+    checkReminders();
+  }
+
   if (req.method === 'GET' && (url.pathname === '/api/cron' || url.pathname === '/healthz')) {
     const checked = checkReminders();
     res.writeHead(200, { 'Content-Type': 'application/json' });
