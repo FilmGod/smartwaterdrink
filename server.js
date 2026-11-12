@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const webpush = require('web-push');
+const { supabase } = require('./supabaseClient.js');
 
 const PORT = process.env.PORT || 5173;
 const STORE_PATH = path.join(__dirname, '.push-store.json');
@@ -43,9 +44,72 @@ function loadStore() {
 }
 
 const store = loadStore();
+
+let supabaseSyncTimer = null;
 const saveStore = () => {
   try { fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2)); } catch (_) {}
+
+  // Debounced cloud sync to Supabase so restarts never lose users/LINE links
+  if (supabase) {
+    if (supabaseSyncTimer) clearTimeout(supabaseSyncTimer);
+    supabaseSyncTimer = setTimeout(async () => {
+      try {
+        const payload = {
+          users: store.users || {},
+          lineLinks: store.lineLinks || {},
+          clients: store.clients || {},
+          defaultLineToken: store.defaultLineToken || null,
+          lineBotInfo: store.lineBotInfo || null,
+          tutorialYouTubeId: store.tutorialYouTubeId || '4kwqAYfVGio',
+          updatedAt: Date.now()
+        };
+        await supabase.from('system_settings').upsert({
+          key: 'store_backup',
+          value: payload,
+          updated_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error('Supabase cloud backup error:', err.message);
+      }
+    }, 1000);
+  }
 };
+
+// Initial hydration from Supabase on startup
+async function initFromSupabase() {
+  if (!supabase) return;
+  try {
+    const { data: row } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'store_backup')
+      .maybeSingle();
+
+    if (row && row.value) {
+      const backup = row.value;
+      if (backup.users) {
+        store.users = Object.assign({}, backup.users, store.users);
+      }
+      if (backup.lineLinks) {
+        store.lineLinks = Object.assign({}, backup.lineLinks, store.lineLinks);
+      }
+      if (backup.defaultLineToken && !store.defaultLineToken) {
+        store.defaultLineToken = backup.defaultLineToken;
+      }
+      if (backup.lineBotInfo && !store.lineBotInfo) {
+        store.lineBotInfo = backup.lineBotInfo;
+      }
+      try { fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2)); } catch (_) {}
+      console.log('✅ Successfully hydrated store from Supabase cloud database!');
+    } else {
+      // First-time backup upload
+      saveStore();
+    }
+  } catch (err) {
+    console.warn('Initial Supabase hydration warning:', err.message);
+  }
+}
+initFromSupabase();
 
 webpush.setVapidDetails(
   'mailto:smartwaterdrink@example.com',
