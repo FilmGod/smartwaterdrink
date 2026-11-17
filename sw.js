@@ -1,9 +1,9 @@
-const C = 'swd-v32', FILES = [
+const C = 'swd-v33', FILES = [
   './',
   'index.html',
-  'styles.css?v=32',
-  'app.js?v=32',
-  'manifest.json?v=32',
+  'styles.css?v=33',
+  'app.js?v=33',
+  'manifest.json?v=33',
   'icon.svg',
   'icon-192.png',
   'icon-512.png',

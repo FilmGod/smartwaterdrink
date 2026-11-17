@@ -711,47 +711,171 @@
     });
   }
 
-  function dropInto(fBefore, fAfter, ml, done) {
-    const drop = $('drop'), stream = $('stream'), ySurf = level(fBefore);
-    playPourSound(ml, fBefore, fAfter);
-    if (calm || !drop.animate) return done();
+  function getBottleScreenPoint(svgX, svgY) {
+    if (bottleSvg && bottleSvg.getScreenCTM) {
+      const pt = bottleSvg.createSVGPoint();
+      pt.x = svgX; pt.y = svgY;
+      const t = pt.matrixTransform(bottleSvg.getScreenCTM());
+      return { x: t.x, y: t.y };
+    }
+    const r = bottleSvg.getBoundingClientRect();
+    return {
+      x: r.left + r.width * (svgX / 200),
+      y: r.top + r.height * ((svgY + 70) / 490)
+    };
+  }
+
+  function pourStreamFromScreenTop(ml, ySurfSvg, onImpact, onFinish) {
+    const fx = $('fx');
+    if (!fx) {
+      if (onImpact) onImpact();
+      if (onFinish) onFinish();
+      return;
+    }
+
+    const mouthPt = getBottleScreenPoint(100, 10);
+    const surfPt = getBottleScreenPoint(100, ySurfSvg);
+
+    const streamX = mouthPt.x;
+    const surfY = surfPt.y;
     const power = Math.min(1.5, Math.max(0.6, ml / 250));
-    const pourMs = Math.round(Math.min(1800, Math.max(520, 380 + (ml / 250) * 520)));
+    const streamWidth = Math.round(10 + power * 6); // 13px - 19px
+    const pourDuration = Math.round(Math.min(1600, Math.max(500, 360 + (ml / 250) * 480)));
+    const fallDuration = 180; // Fast plunge from screen top (0px) to surface
+    const drainDuration = 220; // Tail leaves top of screen and drains into bottle
+
+    const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    overlay.setAttribute('class', 'pour-stream-svg');
+    overlay.setAttribute('viewBox', `0 0 ${window.innerWidth} ${window.innerHeight}`);
+    overlay.innerHTML = `
+      <defs>
+        <linearGradient id="screenPourGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.85"/>
+          <stop offset="28%" stop-color="#E0F7FF" stop-opacity="0.95"/>
+          <stop offset="50%" stop-color="#FFFFFF" stop-opacity="1"/>
+          <stop offset="72%" stop-color="#0284C7" stop-opacity="0.95"/>
+          <stop offset="100%" stop-color="#0369A1" stop-opacity="0.85"/>
+        </linearGradient>
+      </defs>
+      <path class="pour-stream-body"/>
+      <path class="pour-stream-core"/>
+      <ellipse class="pour-stream-cap" cx="${streamX.toFixed(1)}" cy="0" rx="0" ry="0"/>
+    `;
+    fx.appendChild(overlay);
+
+    const bodyPath = overlay.querySelector('.pour-stream-body');
+    const corePath = overlay.querySelector('.pour-stream-core');
+    const cap = overlay.querySelector('.pour-stream-cap');
+
+    let impacted = false;
+    const startT = performance.now();
+
+    function renderRibbon(topY, botY, t) {
+      if (botY <= topY + 2) {
+        bodyPath.setAttribute('d', '');
+        corePath.setAttribute('d', '');
+        cap.setAttribute('rx', '0');
+        cap.setAttribute('ry', '0');
+        return;
+      }
+      const halfW = streamWidth * 0.5;
+      const count = Math.max(6, Math.min(28, Math.floor((botY - topY) / 26)));
+      const step = (botY - topY) / count;
+      const leftPts = [];
+      const rightPts = [];
+      const corePts = [];
+
+      for (let i = 0; i <= count; i++) {
+        const y = topY + i * step;
+        const p = i / count;
+        const pinch = 1 - 0.2 * Math.sin(p * Math.PI);
+        const w = halfW * pinch;
+        const wave = Math.sin(y * 0.038 - t * 0.022) * 1.6;
+        const cx = streamX + wave;
+        leftPts.push(`${(cx - w).toFixed(1)},${y.toFixed(1)}`);
+        rightPts.unshift(`${(cx + w).toFixed(1)},${y.toFixed(1)}`);
+        corePts.push(`${cx.toFixed(1)},${y.toFixed(1)}`);
+      }
+
+      bodyPath.setAttribute('d', `M ${leftPts.join(' L ')} L ${rightPts.join(' L ')} Z`);
+      corePath.setAttribute('d', `M ${corePts.join(' L ')}`);
+      cap.setAttribute('cx', streamX.toFixed(1));
+      cap.setAttribute('cy', botY.toFixed(1));
+      cap.setAttribute('rx', (streamWidth * 0.55).toFixed(1));
+      cap.setAttribute('ry', (streamWidth * 0.28).toFixed(1));
+    }
+
+    function frame(now) {
+      const elapsed = now - startT;
+      let topY = 0;
+      let botY = surfY;
+
+      if (elapsed < fallDuration) {
+        // Plunging down from screen top edge (0px)
+        const prog = Math.min(1, elapsed / fallDuration);
+        const eased = 1 - Math.pow(1 - prog, 3);
+        botY = Math.max(0, eased * surfY);
+        topY = 0;
+      } else if (elapsed < pourDuration) {
+        // Steady pour into bottle
+        topY = 0;
+        botY = surfY;
+        if (!impacted) {
+          impacted = true;
+          if (onImpact) onImpact();
+        }
+      } else if (elapsed < pourDuration + drainDuration) {
+        // Tail drains from top edge down into bottle
+        const drainElapsed = elapsed - pourDuration;
+        const prog = Math.min(1, drainElapsed / drainDuration);
+        const eased = prog * prog;
+        topY = eased * surfY;
+        botY = surfY;
+      } else {
+        // Clean up completely
+        overlay.remove();
+        if (onFinish) onFinish();
+        return;
+      }
+
+      renderRibbon(topY, botY, elapsed);
+      requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  function dropInto(fBefore, fAfter, ml, done) {
+    const ySurf = level(fBefore);
+    playPourSound(ml, fBefore, fAfter);
+    if (calm) return done();
+    const power = Math.min(1.5, Math.max(0.6, ml / 250));
+    const pourMs = Math.round(Math.min(1600, Math.max(500, 360 + (ml / 250) * 480)));
     const mid = Math.floor(N / 2);
 
-    // 1. Pouring stream & leading drop fall from mouth of bottle to water surface
-    stream.setAttribute('height', Math.max(0, ySurf + 12));
-    stream.animate([
-      { opacity: 0, transform: 'scaleX(.4)' },
-      { opacity: .88, transform: `scaleX(${(0.95 + power * 0.22).toFixed(2)})`, offset: .2 },
-      { opacity: .82, transform: 'scaleX(.9)', offset: .8 },
-      { opacity: 0, transform: 'scaleX(.2)' }
-    ], { duration: pourMs, easing: 'ease-out' });
-
-    drop.animate([
-      { transform: 'translateY(0) scale(.6)', opacity: 0 },
-      { transform: 'translateY(10px) scale(1)', opacity: 1, offset: .18 },
-      { transform: `translateY(${ySurf + 30}px) scale(.75,1.25)`, opacity: 1 }
-    ], { duration: 360, easing: 'cubic-bezier(.55,0,1,.45)' }).onfinish = () => {
-      // 2. Impact! Depress center springs, trigger slosh, splash droplets & bubbles
-      pluck(mid, 14 * power, 5);
-      sloshVel += (Math.random() > 0.5 ? 1 : -1) * 0.26 * power;
+    pourStreamFromScreenTop(ml, ySurf, () => {
+      // 1. Water stream impacts the water surface inside bottle!
+      pluck(mid, 16 * power, 6);
+      sloshVel += (Math.random() > 0.5 ? 1 : -1) * 0.28 * power;
       spawnSplash(100, power);
-      done();
+      replay(bottleSvg, 'wobble');
 
-      // Continuous pouring agitation pulses scaled to pour volume
-      let pulses = Math.max(2, Math.round(ml / 85));
+      $('ripple')?.animate([
+        { transform: 'scale(.12)', opacity: .95 },
+        { transform: 'scale(1.2)', opacity: 0 }
+      ], { duration: pourMs, easing: 'ease-out' });
+
+      // Agitation pulses during pouring
+      let pulses = Math.max(2, Math.round(ml / 80));
       const pTimer = setInterval(() => {
         pluck(mid + Math.round((Math.random() - 0.5) * 4), 6 * power, 4);
         if (--pulses <= 0) clearInterval(pTimer);
-      }, 105);
+      }, 110);
 
-      $('ripple').animate([
-        { transform: 'scale(.12)', opacity: .95 },
-        { transform: 'scale(1.15)', opacity: 0 }
-      ], { duration: pourMs, easing: 'ease-out' });
-      replay(bottleSvg, 'wobble');
-    };
+      done();
+    }, () => {
+      // Pour finished and cleaned up
+    });
   }
 
   function add(ml) {
