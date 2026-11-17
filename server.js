@@ -241,6 +241,39 @@ async function fetchLineBotInfo(token) {
   }
 }
 
+let cachedLineQuota = null;
+let lastQuotaFetchTime = 0;
+
+async function getLineQuotaInfo(force = false) {
+  const now = Date.now();
+  if (!force && cachedLineQuota && (now - lastQuotaFetchTime < 180000)) {
+    return cachedLineQuota;
+  }
+  const cleanTok = (store.defaultLineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
+  if (!cleanTok) return null;
+  try {
+    const [qRes, cRes] = await Promise.all([
+      fetch('https://api.line.me/v2/bot/message/quota', { headers: { Authorization: `Bearer ${cleanTok}` } }),
+      fetch('https://api.line.me/v2/bot/message/quota/consumption', { headers: { Authorization: `Bearer ${cleanTok}` } })
+    ]);
+    const quotaData = qRes.ok ? await qRes.json() : {};
+    const consData = cRes.ok ? await cRes.json() : {};
+    const limit = quotaData.value ?? 300;
+    const used = consData.totalUsage ?? 0;
+    cachedLineQuota = {
+      type: quotaData.type || 'limited',
+      limit,
+      used,
+      remaining: Math.max(0, limit - used),
+      isExceeded: used >= limit
+    };
+    lastQuotaFetchTime = now;
+    return cachedLineQuota;
+  } catch (_) {
+    return cachedLineQuota;
+  }
+}
+
 const APP_PUBLIC_URL = process.env.RENDER_EXTERNAL_URL || 'https://smartwaterdrink.onrender.com';
 
 const QUICK_REPLY_ITEMS = [
@@ -510,7 +543,17 @@ async function sendLineMessage({ token, userId, text, glass = 250, consumed = 0,
     });
     if (!resp.ok) {
       const errJson = await resp.json().catch(() => ({}));
-      return { ok: false, error: errJson.message || `LINE API ตอบกลับ ${resp.status}` };
+      let msg = errJson.message || `LINE API ตอบกลับ ${resp.status}`;
+      const isQuota = /monthly limit/i.test(msg);
+      if (isQuota) {
+        msg = 'โควตาส่งข้อความฟรีของ LINE บอทในเดือนนี้เต็มแล้ว (300/300 ข้อความ) จะรีเซ็ตอัตโนมัติในวันที่ 1 ของเดือนถัดไป';
+        if (cachedLineQuota) {
+          cachedLineQuota.isExceeded = true;
+          cachedLineQuota.used = cachedLineQuota.limit;
+          cachedLineQuota.remaining = 0;
+        }
+      }
+      return { ok: false, error: msg, isQuotaExceeded: isQuota };
     }
     return { ok: true, mode: isBroadcast ? 'broadcast' : 'push' };
   } catch (e) {
@@ -705,13 +748,15 @@ const DEFAULT_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '990715836668-6
 const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '4kwqAYfVGio';
 
   if (req.method === 'GET' && url.pathname === '/api/vapid-public-key') {
+    const lineQuota = await getLineQuotaInfo();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       publicKey: store.vapidKeys.publicKey,
       googleClientId: store.googleClientId || DEFAULT_GOOGLE_CLIENT_ID,
       tutorialYouTubeId: store.tutorialYouTubeId || DEFAULT_TUTORIAL_YOUTUBE_ID,
       hasDefaultLineToken: !!store.defaultLineToken,
-      lineBotInfo: store.lineBotInfo || null
+      lineBotInfo: store.lineBotInfo || null,
+      lineQuota
     }));
   }
 
@@ -835,6 +880,8 @@ const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '4kwqAYfV
     const totalTodayMl = usersList.reduce((s, u) => s + u.todayMl, 0);
     const goalMetCount = usersList.filter(u => u.todayMl >= u.goal).length;
 
+    const lineQuota = await getLineQuotaInfo();
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       ok: true,
@@ -846,6 +893,7 @@ const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '4kwqAYfV
       totalTodayMl,
       goalMetCount,
       lineBotInfo: store.lineBotInfo || { displayName: 'Smart Water Drink', basicId: '@943raake' },
+      lineQuota,
       users: usersList
     }));
   }

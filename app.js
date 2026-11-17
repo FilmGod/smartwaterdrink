@@ -1033,7 +1033,10 @@
         toast('ส่งเข้า LINE สำเร็จแล้ว!');
       } else {
         msg.textContent = `ส่งเข้า LINE ไม่สำเร็จ: ${data.error || 'ตรวจสอบการแอดเพื่อนบอทอีกครั้ง'}`;
-        toast('ส่งเข้า LINE ไม่สำเร็จ');
+        if (data.isQuotaExceeded && $('lineQuotaNotice')) {
+          $('lineQuotaNotice').hidden = false;
+        }
+        toast(data.isQuotaExceeded ? 'โควตา LINE บอทเต็มแล้ว' : 'ส่งเข้า LINE ไม่สำเร็จ');
       }
     } catch (_) {
       msg.textContent = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ส่ง LINE ได้';
@@ -1522,7 +1525,10 @@
   };
 
   // Optional Google Identity Services (GIS) button + server-wide LINE bot info
-  fetch('/api/vapid-public-key').then(r => r.json()).then(({ googleClientId, hasDefaultLineToken, lineBotInfo, tutorialYouTubeId }) => {
+  fetch('/api/vapid-public-key').then(r => r.json()).then(({ googleClientId, hasDefaultLineToken, lineBotInfo, tutorialYouTubeId, lineQuota }) => {
+    if (lineQuota && $('lineQuotaNotice')) {
+      $('lineQuotaNotice').hidden = !lineQuota.isExceeded;
+    }
     if (tutorialYouTubeId) {
       activeTutorialYouTubeId = tutorialYouTubeId;
       if ($('adminTutorialYtInput')) $('adminTutorialYtInput').value = tutorialYouTubeId;
@@ -1658,8 +1664,13 @@
       $('aKpiMetSub').textContent = `น้ำรวมวันนี้ ${r0(data.totalTodayMl)} มล.`;
       $('aKpiPush').textContent = `${data.pushClientsCount} เครื่อง`;
       $('aKpiBot').textContent = data.lineBotInfo?.basicId || '@943raake';
-      const minsUp = Math.max(1, Math.round((data.uptimeSec || 60) / 60));
-      $('aKpiUptime').textContent = `ออนไลน์ • Uptime ${minsUp} นาที`;
+      if (data.lineQuota) {
+        const q = data.lineQuota;
+        $('aKpiUptime').textContent = `โควตาข้อความ: ${q.used}/${q.limit} (${q.isExceeded ? 'เต็มแล้ว ⚠️' : 'เหลือ ' + q.remaining})`;
+      } else {
+        const minsUp = Math.max(1, Math.round((data.uptimeSec || 60) / 60));
+        $('aKpiUptime').textContent = `ออนไลน์ • Uptime ${minsUp} นาที`;
+      }
       adminUsersCache = data.users || [];
       renderAdminTable();
     } catch (_) {}

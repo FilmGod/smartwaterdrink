@@ -28,11 +28,11 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=29">
 <link rel="icon" type="image/svg+xml" href="icon.svg?v=29">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=29">
-<link rel="manifest" href="manifest.json?v=31">
+<link rel="manifest" href="manifest.json?v=32">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;700&family=Mitr:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=31">
+<link rel="stylesheet" href="styles.css?v=32">
 </head>
 <body>
 
@@ -383,6 +383,22 @@
                     <strong style="color:#058538;font-size:.94rem">คุณผูกบัญชี LINE เรียบร้อยแล้ว</strong>
                     <small id="lineLinkedSub" class="muted" style="display:block;font-size:.8rem">ซิงก์การแจ้งเตือนและปุ่มกดกับ @943raake อัตโนมัติ</small>
                   </div>
+                </div>
+              </div>
+
+              <!-- LINE Quota Exceeded Notice -->
+              <div id="lineQuotaNotice" hidden style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:12px;padding:.75rem .95rem;color:#78350F;display:grid;gap:.4rem;font-size:.84rem;line-height:1.45">
+                <div style="display:flex;align-items:center;gap:.5rem;font-weight:700;color:#B45309">
+                  <span style="font-size:1.15rem">⚠️</span>
+                  <span>โควตาส่งข้อความฟรีของ LINE บอทในเดือนนี้เต็มแล้ว</span>
+                </div>
+                <p style="margin:0">
+                  โควตาส่งข้อความ Push ฟรีของ LINE Official Account (300 ข้อความ/เดือน) ถูกใช้งานครบตามสิทธิ์แล้ว บอทจึงไม่สามารถส่งแจ้งเตือนเด้งอัตโนมัติเข้าแชตได้ชั่วคราว (จะรีเซ็ตอัตโนมัติในวันที่ 1 ของเดือนถัดไป)
+                </p>
+                <div style="background:#FFF;padding:.45rem .65rem;border-radius:8px;border:1px dashed #FCD34D;font-size:.8rem;color:#92400E">
+                  ✨ <strong>สิ่งที่คุณยังใช้งานได้ฟรีทันที:</strong><br>
+                  • <strong>พิมพ์คุยในแชต LINE บอท:</strong> พิมพ์ <strong>"สถานะ"</strong> หรือ <strong>"+250"</strong> บอทจะตอบกลับการ์ดทันที (ฟรีไม่จำกัด ไม่คิดโควตา)<br>
+                  • <strong>เปิดรับการแจ้งเตือน Web Push:</strong> สลับมาเปิดสวิตช์ <strong>"เปิดรับการแจ้งเตือนดื่มน้ำ"</strong> ด้านบน เพื่อรับการแจ้งเตือนเด้งหน้าจอมือถือฟรีไม่จำกัดครั้ง 100%
                 </div>
               </div>
 
@@ -749,6 +765,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="fx" class="fx" aria-hidden="true"></div>
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 </body>
 </html>
