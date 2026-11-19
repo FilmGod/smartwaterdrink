@@ -669,6 +669,18 @@
     $('goal').textContent = g;
     ticks.querySelectorAll('text').forEach(el => el.textContent = Math.round(g * el.dataset.f / 50) * 50);
 
+    const pctRaw = Math.round((t / Math.max(1, g)) * 100);
+    const pctClamped = Math.min(100, Math.max(0, pctRaw));
+    const fillEl = $('heroProgressFill'), pctEl = $('heroPctPill');
+    if (fillEl) {
+      fillEl.style.width = `${pctClamped}%`;
+      fillEl.classList.toggle('goal-hit', pctRaw >= 100);
+    }
+    if (pctEl) {
+      pctEl.textContent = `${pctRaw}%`;
+      pctEl.classList.toggle('goal-hit', pctRaw >= 100);
+    }
+
     const st = $('status');
     let txt, cls = '';
     if (!state.profile) txt = 'ตั้งค่าร่างกายด้านล่างเพื่อคำนวณเป้าหมายของคุณ';
@@ -884,6 +896,11 @@
     const before = total();
     dayLog().push(ml); save();
     const after = total();
+    const bw = document.querySelector('.bottle-wrap');
+    if (bw) {
+      bw.classList.add('pouring-glow');
+      setTimeout(() => bw.classList.remove('pouring-glow'), 950);
+    }
     dropInto(Math.min(before / state.goal, 1), Math.min(after / state.goal, 1), ml, () => {
       render();
       syncPush();
@@ -2390,6 +2407,17 @@
       openFeedbackModal();
     });
   }
+
+  /* ---------- keyboard Escape dismiss for active dialogs ---------- */
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (feedbackModal && !feedbackModal.hidden) { closeFeedbackModal(); return; }
+    if ($('adminUserDetailModal') && !$('adminUserDetailModal').hidden) { $('adminUserDetailModal').hidden = true; return; }
+    if (tutorialModal && !tutorialModal.hidden) { closeTutorialModal(); return; }
+    if (installAppModal && !installAppModal.hidden) { closeInstallModal(); return; }
+    const gM = $('gModal');
+    if (gM && !gM.hidden) { gM.hidden = true; }
+  });
 
   /* ---------- init ---------- */
   enterApp();
