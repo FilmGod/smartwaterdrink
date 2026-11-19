@@ -15,6 +15,7 @@ const DEFAULT_VAPID = {
 function sanitizeStore(s) {
   s.users ||= {};
   s.lineLinks ||= {};
+  s.feedbacks ||= [];
   s.tutorialYouTubeId = '4kwqAYfVGio';
   // Disconnect boomsiwat1669 from FilmXr01's LINE user ID
   if (s.users['boomsiwat1669@gmail.com']?.rem?.lineUserId === 'Ue38075cfc9536aab575d8ab47ec0ecbb') {
@@ -58,6 +59,7 @@ const saveStore = () => {
           users: store.users || {},
           lineLinks: store.lineLinks || {},
           clients: store.clients || {},
+          feedbacks: store.feedbacks || [],
           defaultLineToken: store.defaultLineToken || null,
           lineBotInfo: store.lineBotInfo || null,
           tutorialYouTubeId: store.tutorialYouTubeId || '4kwqAYfVGio',
@@ -98,6 +100,14 @@ async function initFromSupabase() {
       }
       if (backup.lineBotInfo && !store.lineBotInfo) {
         store.lineBotInfo = backup.lineBotInfo;
+      }
+      if (Array.isArray(backup.feedbacks)) {
+        const existingIds = new Set((store.feedbacks || []).map(f => f.id));
+        const merged = [...(store.feedbacks || [])];
+        for (const fb of backup.feedbacks) {
+          if (fb && fb.id && !existingIds.has(fb.id)) merged.push(fb);
+        }
+        store.feedbacks = merged.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       }
       try { fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2)); } catch (_) {}
       console.log('✅ Successfully hydrated store from Supabase cloud database!');
@@ -848,24 +858,64 @@ const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '4kwqAYfV
     const d = todayStr();
     const usersObj = store.users || {};
     const usersList = Object.entries(usersObj).map(([email, u]) => {
+      const goal = u.goal || 2000;
       const todayLogs = u.logs?.[d] || [];
-      const todayMl = todayLogs.reduce((a, b) => a + b, 0);
+      const todayMl = todayLogs.reduce((a, b) => a + (Number(b) || 0), 0);
       let weekMl = 0;
+      const history7Days = [];
       for (let i = 0; i < 7; i++) {
         const dt = new Date();
         dt.setDate(dt.getDate() - i);
         const k = dt.toLocaleDateString('sv');
-        weekMl += (u.logs?.[k] || []).reduce((a, b) => a + b, 0);
+        const dayArr = u.logs?.[k] || [];
+        const dayMl = dayArr.reduce((a, b) => a + (Number(b) || 0), 0);
+        weekMl += dayMl;
+        history7Days.push({
+          date: k,
+          ml: dayMl,
+          cups: dayArr.length,
+          goalMet: dayMl >= goal
+        });
       }
+
+      let totalAllTimeMl = 0;
+      let totalCupsAllTime = 0;
+      let totalLoggedDays = 0;
+      let daysGoalMet = 0;
+      const dailyLogs = [];
+      if (u.logs) {
+        const sortedDates = Object.keys(u.logs).sort((a, b) => b.localeCompare(a));
+        for (const dtKey of sortedDates) {
+          const arr = Array.isArray(u.logs[dtKey]) ? u.logs[dtKey] : [];
+          if (arr.length > 0) {
+            const sum = arr.reduce((a, b) => a + (Number(b) || 0), 0);
+            totalAllTimeMl += sum;
+            totalCupsAllTime += arr.length;
+            totalLoggedDays++;
+            if (sum >= goal) daysGoalMet++;
+            if (dailyLogs.length < 30) {
+              dailyLogs.push({ date: dtKey, ml: sum, cups: arr.length, entries: arr.slice(0, 40) });
+            }
+          }
+        }
+      }
+
       const p = u.profile;
       const bmi = p && p.height ? +(p.weight / Math.pow(p.height / 100, 2)).toFixed(1) : null;
       return {
         email,
         name: u.name || email.split('@')[0],
-        goal: u.goal || 2000,
+        goal,
         todayMl,
         todayCount: todayLogs.length,
+        todayCups: todayLogs,
         weekAvg: Math.round(weekMl / 7),
+        totalAllTimeMl,
+        totalCupsAllTime,
+        totalLoggedDays,
+        daysGoalMet,
+        history7Days,
+        dailyLogs,
         bmi,
         weight: p?.weight || null,
         height: p?.height || null,
@@ -874,11 +924,25 @@ const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '4kwqAYfV
         lineOn: !!u.rem?.lineOn,
         updatedAt: u.updatedAt || null
       };
-    }).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    }).sort((a, b) => (b.todayMl - a.todayMl) || ((b.updatedAt || 0) - (a.updatedAt || 0)));
 
     const pushClientsCount = Object.values(store.clients || {}).filter(c => c.subscription && c.rem?.on).length;
     const totalTodayMl = usersList.reduce((s, u) => s + u.todayMl, 0);
+    const totalAllTimeMl = usersList.reduce((s, u) => s + u.totalAllTimeMl, 0);
+    const totalGoalTodayMl = usersList.reduce((s, u) => s + u.goal, 0);
     const goalMetCount = usersList.filter(u => u.todayMl >= u.goal).length;
+    const activeTodayCount = usersList.filter(u => u.todayMl > 0).length;
+
+    const feedbacks = (store.feedbacks || []).slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const fbCount = feedbacks.length;
+    const avgRating = fbCount
+      ? +(feedbacks.reduce((s, f) => s + (Number(f.rating) || 0), 0) / fbCount).toFixed(1)
+      : 0;
+    const ratingDist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    for (const f of feedbacks) {
+      const r = Math.min(5, Math.max(1, Math.round(Number(f.rating) || 5)));
+      ratingDist[r] = (ratingDist[r] || 0) + 1;
+    }
 
     const lineQuota = await getLineQuotaInfo();
 
@@ -889,12 +953,21 @@ const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '4kwqAYfV
       today: d,
       uptimeSec: Math.round(process.uptime()),
       totalUsers: usersList.length,
+      activeTodayCount,
       pushClientsCount,
       totalTodayMl,
+      totalAllTimeMl,
+      totalGoalTodayMl,
       goalMetCount,
       lineBotInfo: store.lineBotInfo || { displayName: 'Smart Water Drink', basicId: '@943raake' },
       lineQuota,
-      users: usersList
+      users: usersList,
+      feedbackStats: {
+        count: fbCount,
+        avgRating,
+        ratingDist
+      },
+      feedbacks: feedbacks.slice(0, 100)
     }));
   }
 
@@ -931,6 +1004,47 @@ const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '4kwqAYfV
     const email = (data.email || '').toLowerCase().trim();
     if (email && store.users?.[email]) {
       delete store.users[email];
+      saveStore();
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true }));
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/feedback') {
+    const data = await readJson(req);
+    const rating = Math.min(5, Math.max(1, Math.round(Number(data.rating) || 5)));
+    const categories = Array.isArray(data.categories) ? data.categories.map(String).slice(0, 10) : [];
+    const comment = String(data.comment || '').trim().slice(0, 1000);
+    const email = String(data.email || '').trim().toLowerCase() || 'ผู้ใช้งานทั่วไป (Guest)';
+    const name = String(data.name || '').trim() || (email.includes('@') ? email.split('@')[0] : 'ผู้ใช้ทั่วไป');
+    const page = String(data.page || '').trim().slice(0, 60);
+
+    const feedbackItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      rating,
+      categories,
+      comment,
+      email,
+      name,
+      page,
+      createdAt: Date.now(),
+      dateStr: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
+    };
+
+    store.feedbacks ||= [];
+    store.feedbacks.unshift(feedbackItem);
+    if (store.feedbacks.length > 500) store.feedbacks.length = 500;
+    saveStore();
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true, feedback: feedbackItem }));
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/delete-feedback') {
+    const data = await readJson(req);
+    const id = String(data.id || '').trim();
+    if (id && Array.isArray(store.feedbacks)) {
+      store.feedbacks = store.feedbacks.filter(f => f.id !== id);
       saveStore();
     }
     res.writeHead(200, { 'Content-Type': 'application/json' });

@@ -909,12 +909,12 @@
   $('custom').onsubmit = e => { e.preventDefault(); add($('customMl').value); $('customMl').value = ''; };
 
   /* ---------- reminders ---------- */
-  const mins = s => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+  const mins = s => { const [h, m] = (s || '07:00').split(':').map(Number); return h * 60 + m; };
   const hhmm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   const nowMin = () => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); };
 
   function slots() {
-    const { wake, sleep, glass } = state.rem;
+    const { wake = '07:00', sleep = '22:00', glass = 250 } = state.rem || {};
     const w = mins(wake), rawS = mins(sleep);
     const s = rawS <= w ? Math.min(1439, rawS + 1440) : rawS;
     const n = Math.max(1, Math.ceil(state.goal / Math.max(100, +glass || 250)));
@@ -1749,11 +1749,13 @@
   };
 
   /* ---------- Admin Dashboard ---------- */
+  const escHtml = s => String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
   let adminUnlocked = sessionStorage.getItem('swd.admin') === '1';
   let adminUsersCache = [];
+  let adminFeedbackCache = [];
 
   function checkAdminAccess() {
-    if (isAdminUser()) {
+    if (isAdminUser() || adminUnlocked) {
       adminUnlocked = true;
       $('adminGate').hidden = true;
       $('adminContent').hidden = false;
@@ -1783,20 +1785,31 @@
       const res = await fetch('/api/admin/overview');
       if (!res.ok) return;
       const data = await res.json();
-      $('aKpiUsers').textContent = `${data.totalUsers} คน`;
-      $('aKpiMet').textContent = `${data.goalMetCount} / ${data.totalUsers} คน`;
-      $('aKpiMetSub').textContent = `น้ำรวมวันนี้ ${r0(data.totalTodayMl)} มล.`;
-      $('aKpiPush').textContent = `${data.pushClientsCount} เครื่อง`;
-      $('aKpiBot').textContent = data.lineBotInfo?.basicId || '@943raake';
-      if (data.lineQuota) {
-        const q = data.lineQuota;
-        $('aKpiUptime').textContent = `โควตาข้อความ: ${q.used}/${q.limit} (${q.isExceeded ? 'เต็มแล้ว ⚠️' : 'เหลือ ' + q.remaining})`;
-      } else {
-        const minsUp = Math.max(1, Math.round((data.uptimeSec || 60) / 60));
-        $('aKpiUptime').textContent = `ออนไลน์ • Uptime ${minsUp} นาที`;
+      if ($('aKpiUsers')) $('aKpiUsers').textContent = `${data.totalUsers} คน`;
+      if ($('aKpiUsersSub')) $('aKpiUsersSub').textContent = `ดื่มน้ำวันนี้ ${data.activeTodayCount || 0} คน`;
+      if ($('aKpiMetSub')) $('aKpiMetSub').textContent = `${r0(data.totalTodayMl)} มล.`;
+      if ($('aKpiMet')) $('aKpiMet').textContent = `ครบเป้า ${data.goalMetCount} / ${data.totalUsers} คน`;
+      if ($('aKpiAllTime')) $('aKpiAllTime').textContent = `${r0(data.totalAllTimeMl || 0)} มล.`;
+      const avgPerUser = data.totalUsers ? Math.round((data.totalAllTimeMl || 0) / data.totalUsers) : 0;
+      if ($('aKpiAllTimeSub')) $('aKpiAllTimeSub').textContent = `เฉลี่ย ${r0(avgPerUser)} มล./คน`;
+
+      const fbStats = data.feedbackStats || { count: 0, avgRating: 0, ratingDist: {} };
+      if ($('aKpiFeedback')) $('aKpiFeedback').textContent = `${Number(fbStats.avgRating || 0).toFixed(1)} ★`;
+      if ($('aKpiFeedbackSub')) $('aKpiFeedbackSub').textContent = `จาก ${fbStats.count || 0} แบบประเมิน`;
+
+      if ($('aKpiBot')) $('aKpiBot').textContent = data.lineBotInfo?.basicId || '@943raake';
+      if ($('aKpiPush')) {
+        let qText = 'ออนไลน์';
+        if (data.lineQuota) {
+          const q = data.lineQuota;
+          qText = `LINE ${q.used}/${q.limit}${q.isExceeded ? ' ⚠️' : ''}`;
+        }
+        $('aKpiPush').innerHTML = `Push ${data.pushClientsCount} เครื่อง • <span id="aKpiUptime">${qText}</span>`;
       }
       adminUsersCache = data.users || [];
+      adminFeedbackCache = data.feedbacks || [];
       renderAdminTable();
+      renderAdminFeedbacks(fbStats);
     } catch (_) {}
   }
 
@@ -1806,6 +1819,7 @@
       !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
     );
     const tbody = $('adminUsersBody');
+    if (!tbody) return;
     if (!list.length) {
       tbody.innerHTML = `<tr><td colspan="6" class="muted">ยังไม่มีข้อมูลผู้ใช้งานที่ตรงกับการค้นหา</td></tr>`;
       return;
@@ -1817,22 +1831,138 @@
         u.pushOn ? '<span class="badge">Push</span>' : ''
       ].filter(Boolean).join(' ') || '<span class="muted">ปิด</span>';
       return `<tr>
-        <td><strong>${u.name}</strong><br><small class="muted">${u.email}</small></td>
-        <td><strong>${r0(u.todayMl)}</strong> / ${r0(u.goal)} มล. <small>(${pct}%)</small></td>
+        <td><strong>${escHtml(u.name)}</strong><br><small class="muted">${escHtml(u.email)}</small></td>
+        <td>
+          <div><strong>${r0(u.todayMl)}</strong> / ${r0(u.goal)} มล. <small class="muted">(${u.todayCount || 0} แก้ว • ${pct}%)</small></div>
+          <div class="admin-prog-wrap">
+            <div class="admin-prog-bar"><div class="admin-prog-fill ${pct >= 100 ? 'hit' : ''}" style="width:${pct}%"></div></div>
+          </div>
+        </td>
+        <td><strong>${r0(u.totalAllTimeMl || 0)}</strong> มล.<br><small class="muted">${u.totalLoggedDays || 0} วัน • ครบเป้า ${u.daysGoalMet || 0} วัน</small></td>
         <td>${r0(u.weekAvg)} มล./วัน</td>
-        <td>${u.bmi ? u.bmi : '–'}</td>
         <td>${badges}</td>
-        <td><button type="button" class="mini-btn" data-del="${u.email}">ลบ</button></td>
+        <td style="white-space:nowrap">
+          <button type="button" class="mini-btn info-btn" data-detail="${escHtml(u.email)}">📋 ประวัติ</button>
+          <button type="button" class="mini-btn" data-del="${escHtml(u.email)}">ลบ</button>
+        </td>
       </tr>`;
     }).join('');
+    tbody.querySelectorAll('[data-detail]').forEach(btn => {
+      btn.onclick = () => openAdminUserDetailModal(btn.dataset.detail);
+    });
     tbody.querySelectorAll('[data-del]').forEach(btn => {
       btn.onclick = async () => {
+        if (!confirm(`ยืนยันการลบข้อมูลผู้ใช้ ${btn.dataset.del} ?`)) return;
         await fetch('/api/admin/delete-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: btn.dataset.del })
         });
         toast(`ลบผู้ใช้ ${btn.dataset.del} แล้ว`);
+        loadAdminDashboard();
+      };
+    });
+  }
+
+  function openAdminUserDetailModal(email) {
+    const u = adminUsersCache.find(item => item.email === email);
+    const modal = $('adminUserDetailModal');
+    if (!u || !modal) return;
+    $('adminDetailTitle').textContent = `${u.name}`;
+    $('adminDetailSub').textContent = `${u.email} • เป้าหมาย ${r0(u.goal)} มล./วัน`;
+
+    $('adminDetailStats').innerHTML = `
+      <div class="admin-stat-chip"><small>ดื่มวันนี้</small><strong>${r0(u.todayMl)} มล.</strong></div>
+      <div class="admin-stat-chip"><small>สะสมทั้งหมด</small><strong>${r0(u.totalAllTimeMl || 0)} มล.</strong></div>
+      <div class="admin-stat-chip"><small>ทำครบเป้า</small><strong>${u.daysGoalMet || 0} / ${u.totalLoggedDays || 0} วัน</strong></div>
+    `;
+
+    const weekArr = (u.history7Days || []).slice().reverse();
+    const maxMl = Math.max(u.goal || 2000, ...weekArr.map(d => d.ml), 500);
+    $('adminDetailWeekBars').innerHTML = weekArr.map(d => {
+      const h = Math.max(4, Math.round((d.ml / maxMl) * 76));
+      const shortDate = d.date.slice(5);
+      return `<div class="ad-w-col">
+        <span class="ad-w-val">${d.ml > 0 ? r0(d.ml) : ''}</span>
+        <div class="ad-w-bar ${d.goalMet ? 'hit' : ''}" style="height:${h}px" title="${d.date}: ${r0(d.ml)} มล. (${d.cups} แก้ว)"></div>
+        <span>${shortDate}</span>
+      </div>`;
+    }).join('') || '<p class="muted">ยังไม่มีข้อมูล 7 วัน</p>';
+
+    const logs = u.dailyLogs || [];
+    $('adminDetailLogsList').innerHTML = logs.length
+      ? logs.map(day => {
+          const pct = Math.min(100, Math.round((day.ml / Math.max(1, u.goal)) * 100));
+          const cupsHtml = (day.entries || []).map(v => `<span class="ad-cup-pill">+${r0(v)} มล.</span>`).join('');
+          return `<div class="ad-log-row">
+            <div class="ad-log-top">
+              <strong>📅 ${day.date}</strong>
+              <span><strong>${r0(day.ml)}</strong> มล. (${day.cups} แก้ว • ${pct}%)</span>
+            </div>
+            <div class="ad-log-cups">${cupsHtml}</div>
+          </div>`;
+        }).join('')
+      : '<p class="muted" style="text-align:center;padding:1rem">ผู้ใช้นี้ยังไม่มีประวัติการบันทึกการดื่มน้ำ</p>';
+
+    modal.hidden = false;
+  }
+
+  if ($('closeAdminDetailXBtn')) {
+    $('closeAdminDetailXBtn').onclick = () => { $('adminUserDetailModal').hidden = true; };
+  }
+  if ($('adminUserDetailModal')) {
+    $('adminUserDetailModal').addEventListener('click', e => {
+      if (e.target === $('adminUserDetailModal')) $('adminUserDetailModal').hidden = true;
+    });
+  }
+
+  function renderAdminFeedbacks(stats = {}) {
+    const summaryEl = $('adminFeedbackSummaryText');
+    const pillsEl = $('adminRatingPills');
+    const tbody = $('adminFeedbackBody');
+    if (!tbody) return;
+
+    const count = stats.count || adminFeedbackCache.length;
+    const avg = Number(stats.avgRating || 0).toFixed(1);
+    if (summaryEl) {
+      summaryEl.textContent = count
+        ? `คะแนนความพึงพอใจเฉลี่ย ${avg} / 5.0 ดาว จากผู้ประเมินทั้งหมด ${count} คน`
+        : 'ยังไม่มีผู้ส่งแบบประเมินความพึงพอใจเข้ามาในระบบ';
+    }
+    if (pillsEl) {
+      const dist = stats.ratingDist || {};
+      pillsEl.innerHTML = [5, 4, 3, 2, 1]
+        .filter(s => (dist[s] || 0) > 0)
+        .map(s => `<span class="admin-rating-pill">${s} ★ (${dist[s]})</span>`)
+        .join('');
+    }
+
+    if (!adminFeedbackCache.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="muted">ยังไม่มีแบบประเมินและข้อเสนอแนะ</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = adminFeedbackCache.map(fb => {
+      const stars = '★'.repeat(fb.rating || 5) + '☆'.repeat(5 - (fb.rating || 5));
+      const cats = (fb.categories || []).map(c => `<span class="fb-cat-tag">${escHtml(c)}</span>`).join('');
+      const commentTxt = fb.comment ? `<div style="margin-top:.2rem">${escHtml(fb.comment)}</div>` : '<small class="muted">— ไม่มีข้อความเพิ่มเติม —</small>';
+      return `<tr>
+        <td style="white-space:nowrap"><small>${escHtml(fb.dateStr || '')}</small></td>
+        <td><strong>${escHtml(fb.name || 'ผู้ใช้ทั่วไป')}</strong><br><small class="muted">${escHtml(fb.email || '')}</small></td>
+        <td><span class="fb-stars-view">${stars}</span><br><small class="muted">${fb.rating}/5 ดาว</small></td>
+        <td class="fb-comment-cell">${cats}${commentTxt}</td>
+        <td><button type="button" class="mini-btn" data-delfb="${escHtml(fb.id)}">ลบ</button></td>
+      </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('[data-delfb]').forEach(btn => {
+      btn.onclick = async () => {
+        await fetch('/api/admin/delete-feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: btn.dataset.delfb })
+        });
+        toast('ลบรายการประเมินแล้ว');
         loadAdminDashboard();
       };
     });
@@ -2051,6 +2181,213 @@
   if (installAppModal) {
     installAppModal.addEventListener('click', e => {
       if (e.target === installAppModal) closeInstallModal();
+    });
+  }
+
+  /* ---------- Draggable Dark-Blue Feedback FAB & Modal ---------- */
+  const feedbackFab = $('feedbackFab');
+  const feedbackModal = $('feedbackModal');
+  const closeFeedbackXBtn = $('closeFeedbackXBtn');
+  const cancelFeedbackBtn = $('cancelFeedbackBtn');
+  const feedbackForm = $('feedbackForm');
+  const fbStarRow = $('fbStarRow');
+  const fbRatingLabel = $('fbRatingLabel');
+  const fbCategoryChips = $('fbCategoryChips');
+  const fbCommentInput = $('fbComment');
+  const fbUserNameInput = $('fbUserName');
+  const fbStatusMsg = $('fbStatusMsg');
+
+  let selectedFbRating = 5;
+  const ratingLabels = {
+    1: 'ควรปรับปรุง 🤔 (1/5 ดาว)',
+    2: 'พอใช้ 😐 (2/5 ดาว)',
+    3: 'ปานกลาง 🙂 (3/5 ดาว)',
+    4: 'ดีมาก 😊 (4/5 ดาว)',
+    5: 'ประทับใจมากที่สุด! 🤩 (5/5 ดาว)'
+  };
+
+  function updateFbStarsUI(val) {
+    selectedFbRating = val;
+    if (fbStarRow) {
+      fbStarRow.querySelectorAll('.fb-star').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.val) <= val);
+      });
+    }
+    if (fbRatingLabel) fbRatingLabel.textContent = ratingLabels[val] || '';
+  }
+
+  if (fbStarRow) {
+    fbStarRow.querySelectorAll('.fb-star').forEach(btn => {
+      btn.onclick = () => updateFbStarsUI(Number(btn.dataset.val));
+    });
+  }
+
+  if (fbCategoryChips) {
+    fbCategoryChips.querySelectorAll('.fb-chip').forEach(chip => {
+      chip.onclick = () => chip.classList.toggle('selected');
+    });
+  }
+
+  function openFeedbackModal() {
+    if (!feedbackModal) return;
+    if (fbUserNameInput && state.user?.name && !fbUserNameInput.value) {
+      fbUserNameInput.value = state.user.name;
+    }
+    if (fbStatusMsg) fbStatusMsg.textContent = '';
+    feedbackModal.hidden = false;
+  }
+
+  function closeFeedbackModal() {
+    if (feedbackModal) feedbackModal.hidden = true;
+  }
+
+  if (closeFeedbackXBtn) closeFeedbackXBtn.onclick = closeFeedbackModal;
+  if (cancelFeedbackBtn) cancelFeedbackBtn.onclick = closeFeedbackModal;
+  if (feedbackModal) {
+    feedbackModal.addEventListener('click', e => {
+      if (e.target === feedbackModal) closeFeedbackModal();
+    });
+  }
+
+  if (feedbackForm) {
+    feedbackForm.onsubmit = async e => {
+      e.preventDefault();
+      const categories = fbCategoryChips
+        ? [...fbCategoryChips.querySelectorAll('.fb-chip.selected')].map(c => c.dataset.cat)
+        : [];
+      const comment = (fbCommentInput?.value || '').trim();
+      const customName = (fbUserNameInput?.value || '').trim();
+      const email = state.user?.email || 'ผู้ใช้งานทั่วไป (Guest)';
+      const name = customName || state.user?.name || (email.includes('@') ? email.split('@')[0] : 'ผู้ใช้ทั่วไป');
+      const activeTabEl = document.querySelector('.tab-btn[aria-selected="true"]');
+      const page = !($('appView')?.hidden) && activeTabEl ? activeTabEl.textContent.trim() : 'หน้าแรก / Landing';
+
+      const submitBtn = $('submitFeedbackBtn');
+      if (submitBtn) submitBtn.disabled = true;
+      if (fbStatusMsg) fbStatusMsg.textContent = 'กำลังส่งแบบประเมิน...';
+
+      try {
+        const res = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rating: selectedFbRating,
+            categories,
+            comment,
+            name,
+            email,
+            page
+          })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          toast('💙 ขอบคุณสำหรับแบบประเมินและข้อเสนอแนะของคุณ!');
+          if (fbCommentInput) fbCommentInput.value = '';
+          if (fbCategoryChips) fbCategoryChips.querySelectorAll('.fb-chip.selected').forEach(c => c.classList.remove('selected'));
+          updateFbStarsUI(5);
+          closeFeedbackModal();
+          if (adminUnlocked || isAdminUser()) loadAdminDashboard();
+        } else {
+          if (fbStatusMsg) fbStatusMsg.textContent = 'ส่งไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
+        }
+      } catch (_) {
+        if (fbStatusMsg) fbStatusMsg.textContent = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ในขณะนี้';
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    };
+  }
+
+  if (feedbackFab) {
+    const FAB_KEY = 'swd.fabPos';
+    let isDragging = false;
+    let dragMoved = false;
+    let startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    let suppressClickUntil = 0;
+
+    function clampFabPos(left, top) {
+      const rect = feedbackFab.getBoundingClientRect();
+      const w = rect.width || 110;
+      const h = rect.height || 48;
+      const minX = 8, maxX = Math.max(minX, window.innerWidth - w - 8);
+      const minY = 8, maxY = Math.max(minY, window.innerHeight - h - 8);
+      return {
+        left: Math.min(maxX, Math.max(minX, left)),
+        top: Math.min(maxY, Math.max(minY, top))
+      };
+    }
+
+    function applyFabPos(left, top) {
+      const c = clampFabPos(left, top);
+      feedbackFab.style.left = c.left + 'px';
+      feedbackFab.style.top = c.top + 'px';
+      feedbackFab.style.right = 'auto';
+      feedbackFab.style.bottom = 'auto';
+      return c;
+    }
+
+    try {
+      const saved = JSON.parse(localStorage.getItem(FAB_KEY) || 'null');
+      if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
+        requestAnimationFrame(() => applyFabPos(saved.left, saved.top));
+      }
+    } catch (_) {}
+
+    window.addEventListener('resize', () => {
+      if (feedbackFab.style.left && feedbackFab.style.top) {
+        applyFabPos(parseFloat(feedbackFab.style.left), parseFloat(feedbackFab.style.top));
+      }
+    });
+
+    feedbackFab.addEventListener('pointerdown', e => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      isDragging = true;
+      dragMoved = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = feedbackFab.getBoundingClientRect();
+      origLeft = rect.left;
+      origTop = rect.top;
+      try { feedbackFab.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+
+    window.addEventListener('pointermove', e => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (!dragMoved && Math.hypot(dx, dy) > 6) {
+        dragMoved = true;
+        feedbackFab.classList.add('dragging');
+      }
+      if (dragMoved) {
+        applyFabPos(origLeft + dx, origTop + dy);
+      }
+    });
+
+    const endDrag = e => {
+      if (!isDragging) return;
+      isDragging = false;
+      feedbackFab.classList.remove('dragging');
+      try { feedbackFab.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (dragMoved) {
+        suppressClickUntil = Date.now() + 250;
+        const rect = feedbackFab.getBoundingClientRect();
+        try {
+          localStorage.setItem(FAB_KEY, JSON.stringify({ left: Math.round(rect.left), top: Math.round(rect.top) }));
+        } catch (_) {}
+      }
+    };
+
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
+
+    feedbackFab.addEventListener('click', e => {
+      if (Date.now() < suppressClickUntil) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      openFeedbackModal();
     });
   }
 
