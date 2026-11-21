@@ -557,13 +557,18 @@ async function sendLineMessage({ token, userId, text, glass = 250, consumed = 0,
       const isQuota = /monthly limit/i.test(msg);
       if (isQuota) {
         msg = 'โควตาส่งข้อความฟรีของ LINE บอทในเดือนนี้เต็มแล้ว (300/300 ข้อความ) จะรีเซ็ตอัตโนมัติในวันที่ 1 ของเดือนถัดไป';
-        if (cachedLineQuota) {
-          cachedLineQuota.isExceeded = true;
-          cachedLineQuota.used = cachedLineQuota.limit;
-          cachedLineQuota.remaining = 0;
-        }
+        cachedLineQuota ||= { type: 'limited', limit: 300, used: 300, remaining: 0, isExceeded: true };
+        cachedLineQuota.isExceeded = true;
+        cachedLineQuota.used = cachedLineQuota.limit;
+        cachedLineQuota.remaining = 0;
       }
       return { ok: false, error: msg, isQuotaExceeded: isQuota };
+    }
+    const usingSharedDefault = !token || token === store.defaultLineToken;
+    if (usingSharedDefault && cachedLineQuota) {
+      cachedLineQuota.used = (cachedLineQuota.used || 0) + 1;
+      cachedLineQuota.remaining = Math.max(0, (cachedLineQuota.limit || 300) - cachedLineQuota.used);
+      cachedLineQuota.isExceeded = cachedLineQuota.used >= (cachedLineQuota.limit || 300);
     }
     return { ok: true, mode: isBroadcast ? 'broadcast' : 'push' };
   } catch (e) {
@@ -598,12 +603,26 @@ function ensureUserFiredInit(u, d, cur) {
   return u.firedByDay[d];
 }
 
+function shouldSendLineForSlot(rem, consumed, goal, expectedAtSlot, targetObj, d) {
+  if (cachedLineQuota?.isExceeded && !rem?.lineToken) return false;
+  const lMode = rem?.lineMode || 'saver';
+  if (lMode === 'summary_only') return false;
+  if (lMode === 'all') return true;
+  // 'saver' (default): Web Push notifies routinely; LINE only sends at most 1 catch-up warning/day when significantly behind
+  const glass = rem?.glass || 250;
+  const significantlyBehind = (expectedAtSlot - consumed) >= Math.max(glass * 2, goal * 0.25);
+  if (!significantlyBehind) return false;
+  if (targetObj.lineSaverWarnedDate === d) return false;
+  targetObj.lineSaverWarnedDate = d;
+  return true;
+}
+
 function checkReminders() {
   const d = todayStr(), cur = nowMin();
   let checked = 0;
   const hasUsers = Object.keys(store.users || {}).length > 0;
 
-  // 1) Web Push & legacy client-synced reminders
+  // 1) Web Push (Free & Unlimited) & client-synced reminders
   for (const [id, c] of Object.entries(store.clients)) {
     if (!c.rem?.on && (hasUsers || !c.rem?.lineOn || !c.rem?.lineUserId)) continue;
     checked++;
@@ -613,25 +632,37 @@ function checkReminders() {
       c.fired = [];
       c.snoozeUntil = 0;
     }
+    // Keep client stats live in sync with registered user account if linked
+    const linkedUser = c.email ? store.users?.[c.email] : null;
+    if (linkedUser) {
+      c.goal = linkedUser.goal || c.goal || 2000;
+      c.consumed = (linkedUser.logs?.[d] || []).reduce((a, b) => a + b, 0);
+      c.rem = Object.assign({}, linkedUser.rem || {}, { on: !!c.rem?.on });
+      if (linkedUser.snoozeDay === d && linkedUser.snoozeUntil) {
+        c.snoozeUntil = linkedUser.snoozeUntil;
+      }
+    }
     if (c.snoozeUntil && cur < c.snoozeUntil) continue;
     const goal = c.goal || 2000;
     const glass = c.rem.glass || 250;
     const sleepMin = getEffectiveSleepMin(c.rem);
 
-    // Nightly Summary Report at sleep time
+    // Nightly Summary Report at sleep time (legacy non-user fallback)
     if (!hasUsers && c.rem?.lineOn && c.rem?.lineUserId && c.rem?.nightSummaryOn !== false && cur >= sleepMin && c.nightSummaryDate !== d) {
-      c.nightSummaryDate = d;
-      saveStore();
-      sendLineMessage({
-        token: c.rem.lineToken || store.defaultLineToken,
-        userId: c.rem.lineUserId,
-        text: `สรุปการดื่มน้ำประจำวันที่ ${d} ของคุณ พักผ่อนให้เพียงพอนะครับ 🌙`,
-        glass,
-        consumed: c.consumed || 0,
-        goal,
-        mode: 'summary',
-        customMsg: c.rem.customMsg || ''
-      });
+      if (!(cachedLineQuota?.isExceeded && !c.rem?.lineToken)) {
+        c.nightSummaryDate = d;
+        saveStore();
+        sendLineMessage({
+          token: c.rem.lineToken || store.defaultLineToken,
+          userId: c.rem.lineUserId,
+          text: `สรุปการดื่มน้ำประจำวันที่ ${d} ของคุณ พักผ่อนให้เพียงพอนะครับ 🌙`,
+          glass,
+          consumed: c.consumed || 0,
+          goal,
+          mode: 'summary',
+          customMsg: c.rem.customMsg || ''
+        });
+      }
     }
 
     const list = computeSlots(c.rem, goal);
@@ -647,34 +678,38 @@ function checkReminders() {
       const behindMuch = last.expected - (c.consumed || 0) >= glass * 1.5;
       if (c.rem?.on && c.subscription) {
         sendPush(id, c, {
-          title: 'Smart Water Drink',
-          body: `${msgText} (เหลือ ${left} มล.)`,
+          title: '💧 Smart Water Drink',
+          body: `${msgText} (เหลืออีก ${left} มล.)`,
           glass,
           clientId: id
         });
       }
       if (!hasUsers && c.rem?.lineOn && c.rem?.lineUserId && (c.rem?.lineToken || store.defaultLineToken)) {
-        sendLineMessage({
-          token: c.rem.lineToken || store.defaultLineToken,
-          userId: c.rem.lineUserId,
-          text: msgText,
-          glass,
-          consumed: c.consumed || 0,
-          goal,
-          mode: behindMuch ? 'behind' : 'auto',
-          customMsg: c.rem.customMsg || ''
-        });
+        if (shouldSendLineForSlot(c.rem, c.consumed || 0, goal, last.expected, c, d)) {
+          saveStore();
+          sendLineMessage({
+            token: c.rem.lineToken || store.defaultLineToken,
+            userId: c.rem.lineUserId,
+            text: msgText,
+            glass,
+            consumed: c.consumed || 0,
+            goal,
+            mode: behindMuch ? 'behind' : 'auto',
+            customMsg: c.rem.customMsg || ''
+          });
+        }
       }
     }
   }
 
-  // 2) User-synced LINE reminders (Primary source for all logged-in accounts)
+  // 2) User-synced LINE reminders (Quota-aware)
   for (const [email, u] of Object.entries(store.users || {})) {
-    u.rem ||= { on: false, lineOn: true, wake: '07:00', sleep: '22:00', glass: 250 };
+    u.rem ||= { on: false, lineOn: true, lineMode: 'saver', wake: '07:00', sleep: '22:00', glass: 250 };
     // STRICT PRIVACY: Only send if this specific user has enabled LINE AND has their OWN valid lineUserId!
     if (u.rem.lineOn === false || !u.rem.lineUserId || (!u.rem?.lineToken && !store.defaultLineToken)) continue;
     checked++;
     const tok = u.rem.lineToken || store.defaultLineToken;
+    if (cachedLineQuota?.isExceeded && !u.rem.lineToken) continue;
     if (u.snoozeDay === d && u.snoozeUntil && cur < u.snoozeUntil) continue;
 
     const fired = ensureUserFiredInit(u, d, cur);
@@ -683,7 +718,7 @@ function checkReminders() {
     const consumed = (u.logs?.[d] || []).reduce((a, b) => a + b, 0);
     const sleepMin = getEffectiveSleepMin(u.rem);
 
-    // Nightly Summary Report at sleep time
+    // Nightly Summary Report at sleep time (max 1 LINE msg/day)
     if (u.rem?.nightSummaryOn !== false && cur >= sleepMin && u.nightSummaryDate !== d) {
       u.nightSummaryDate = d;
       saveStore();
@@ -706,8 +741,9 @@ function checkReminders() {
     due.forEach(s => fired.push(s.at));
     const last = due[due.length - 1];
     saveStore();
-    if (consumed < goal) {
+    if (consumed < goal && shouldSendLineForSlot(u.rem, consumed, goal, last.expected, u, d)) {
       const behindMuch = last.expected - consumed >= glass * 1.5;
+      saveStore();
       sendLineMessage({
         token: tok,
         userId: u.rem.lineUserId,
@@ -1057,7 +1093,9 @@ const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '4kwqAYfV
     if (id) {
       const prev = store.clients[id] || {};
       const d = todayStr();
+      const email = (data.email || prev.email || '').trim().toLowerCase();
       store.clients[id] = {
+        email,
         subscription: data.subscription || prev.subscription,
         rem: data.rem || prev.rem || { on: false, wake: '07:00', sleep: '22:00', glass: 250 },
         goal: data.goal || prev.goal || 2000,
@@ -1070,8 +1108,8 @@ const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '4kwqAYfV
       const cur = nowMin();
       const slots = computeSlots(store.clients[id].rem, store.clients[id].goal);
       slots.forEach(s => {
-        if (s.at <= cur && !store.clients[id].fired.includes(s.i)) {
-          store.clients[id].fired.push(s.i);
+        if (s.at <= cur && !store.clients[id].fired.includes(s.at)) {
+          store.clients[id].fired.push(s.at);
         }
       });
       const flushed = store.clients[id].pendingAdd || [];
@@ -1089,9 +1127,18 @@ const DEFAULT_TUTORIAL_YOUTUBE_ID = process.env.TUTORIAL_YOUTUBE_ID || '4kwqAYfV
     const id = data.clientId;
     const ml = Math.round(+data.ml || 250);
     if (id && store.clients[id]) {
-      store.clients[id].consumed = (store.clients[id].consumed || 0) + ml;
-      store.clients[id].pendingAdd ||= [];
-      store.clients[id].pendingAdd.push(ml);
+      const c = store.clients[id];
+      const d = todayStr();
+      c.consumed = (c.consumed || 0) + ml;
+      c.pendingAdd ||= [];
+      c.pendingAdd.push(ml);
+      if (c.email && store.users?.[c.email]) {
+        const u = store.users[c.email];
+        u.logs ||= {};
+        u.logs[d] ||= [];
+        u.logs[d].push(ml);
+        u.updatedAt = Date.now();
+      }
       saveStore();
     }
     res.writeHead(200, { 'Content-Type': 'application/json' });

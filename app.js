@@ -6,9 +6,10 @@
 
   const state = Object.assign({
     user: null, profile: null, goal: 2000, logs: {}, fired: {},
-    rem: { on: false, lineOn: true, nightSummaryOn: true, wake: '07:00', sleep: '22:00', glass: 250 }
+    rem: { on: false, lineOn: true, lineMode: 'saver', nightSummaryOn: true, wake: '07:00', sleep: '22:00', glass: 250 }
   }, JSON.parse(localStorage.getItem(KEY) || '{}'));
   if (state.rem && state.rem.lineOn === undefined) state.rem.lineOn = true;
+  if (state.rem && !state.rem.lineMode) state.rem.lineMode = 'saver';
   const save = () => {
     localStorage.setItem(KEY, JSON.stringify(state));
     if (state.user?.email) {
@@ -1008,12 +1009,13 @@
 
   async function syncPush() {
     try {
-      const sub = pushSub || (state.rem.on && Notification.permission === 'granted' ? await ensurePushSubscription() : null);
+      const sub = pushSub || (state.rem.on && Notification?.permission === 'granted' ? await ensurePushSubscription() : null);
       if (!sub) return false;
       const res = await fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          email: state.user?.email || '',
           subscription: sub,
           rem: state.rem,
           goal: state.goal,
@@ -1032,6 +1034,116 @@
     } catch (_) {
       return false;
     }
+  }
+
+  function updateWebPushUI() {
+    const chk = $('remOn');
+    const st = $('webPushStatusText');
+    if (chk) chk.checked = !!state.rem.on;
+    if (!st) return;
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      st.textContent = isIOS && !isStandaloneApp()
+        ? '📱 สำหรับ iPhone/iPad: แตะ "แชร์" ด้านล่าง -> "เพิ่มไปยังหน้าจอโฮม" ก่อนเปิดรับแจ้งเตือนบนเครื่องครับ'
+        : '⚠️ เบราว์เซอร์นี้ไม่รองรับ Web Push Notification';
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      st.textContent = '🚫 การแจ้งเตือนถูกบล็อกในตั้งค่าเบราว์เซอร์ (กรุณาเปิดสิทธิ์แจ้งเตือนที่ไอคอนแม่กุญแจข้าง URL)';
+    } else if (state.rem.on && Notification.permission === 'granted') {
+      st.textContent = '🟢 เปิดรับแจ้งเตือนฟรีไม่จำกัดแล้ว! ระบบจะเด้งเตือนทุกแก้วตามตารางแม้ปิดหน้าเว็บ';
+    } else {
+      st.textContent = 'แตะเปิดสวิตช์ด้านบน เพื่อรับแจ้งเตือนทุกแก้วฟรี 100% ไม่จำกัดจำนวนครั้ง';
+    }
+  }
+
+  if ($('remOn')) {
+    $('remOn').addEventListener('change', async () => {
+      const wantOn = $('remOn').checked;
+      if (!wantOn) {
+        state.rem.on = false;
+        save();
+        updateWebPushUI();
+        syncPush();
+        toast('ปิดแจ้งเตือน Web Push แล้ว');
+        return;
+      }
+      if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+        $('remOn').checked = false;
+        state.rem.on = false;
+        updateWebPushUI();
+        toast('กรุณาติดตั้งแอปลงหน้าจอโฮมก่อนเปิดแจ้งเตือนครับ');
+        return;
+      }
+      try {
+        const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+        if (perm !== 'granted') {
+          $('remOn').checked = false;
+          state.rem.on = false;
+          updateWebPushUI();
+          toast('กรุณากด "อนุญาต (Allow)" เพื่อรับแจ้งเตือนดื่มน้ำ');
+          return;
+        }
+        state.rem.on = true;
+        save();
+        await ensurePushSubscription();
+        await syncPush();
+        updateWebPushUI();
+        toast('🔔 เปิดแจ้งเตือน Web Push ฟรีไม่จำกัดเรียบร้อยแล้ว!');
+      } catch (_) {
+        $('remOn').checked = false;
+        state.rem.on = false;
+        updateWebPushUI();
+      }
+    });
+  }
+
+  if ($('testWebPushBtn')) {
+    $('testWebPushBtn').onclick = async () => {
+      const btn = $('testWebPushBtn');
+      const orig = btn.textContent;
+      if (!('Notification' in window)) {
+        return toast('อุปกรณ์นี้ไม่รองรับการแจ้งเตือนผ่านเว็บ');
+      }
+      if (Notification.permission !== 'granted') {
+        const perm = await Notification.requestPermission().catch(() => 'denied');
+        if (perm !== 'granted') {
+          updateWebPushUI();
+          return toast('กรุณาอนุญาตการแจ้งเตือนก่อนทดสอบครับ');
+        }
+      }
+      state.rem.on = true;
+      if ($('remOn')) $('remOn').checked = true;
+      save();
+      updateWebPushUI();
+      btn.disabled = true;
+      btn.textContent = '⏳ กำลังส่ง Web Push...';
+      try {
+        const sub = await ensurePushSubscription();
+        await syncPush();
+        if (sub) {
+          const r = await fetch('/api/test-push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscription: sub, delayMs: 1200 })
+          });
+          if (r.ok) {
+            toast('🔔 ส่งสัญญาณทดสอบ Web Push แล้ว! รอรับเด้งบนหน้าจอใน 1-2 วินาที');
+          } else {
+            await notify(`💧 ทดสอบแจ้งเตือนฟรี! ดื่มน้ำสัก ${state.rem.glass || 250} มล. นะ`);
+            toast('ส่งแจ้งเตือนทดสอบบนเครื่องแล้ว!');
+          }
+        } else {
+          await notify(`💧 ทดสอบแจ้งเตือนฟรี! ดื่มน้ำสัก ${state.rem.glass || 250} มล. นะ`);
+          toast('ส่งแจ้งเตือนทดสอบบนเครื่องแล้ว!');
+        }
+      } catch (_) {
+        await notify(`💧 ทดสอบแจ้งเตือนฟรี! ดื่มน้ำสัก ${state.rem.glass || 250} มล. นะ`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    };
   }
 
   if ('serviceWorker' in navigator) {
@@ -1073,11 +1185,12 @@
 
   function syncRemInputsToState(showToast = false) {
     Object.assign(state.rem, {
-      on: false,
+      on: $('remOn') ? $('remOn').checked : !!state.rem.on,
       wake: $('wake').value || '07:00',
       sleep: $('sleep').value || '22:00',
       glass: Math.max(100, +$('glass').value || 250),
       lineOn: $('lineOn').checked,
+      lineMode: $('lineMode') ? $('lineMode').value : (state.rem.lineMode || 'saver'),
       nightSummaryOn: $('nightSummaryOn') ? $('nightSummaryOn').checked : true,
       tone: $('remTone') ? $('remTone').value : 'health',
       customMsg: $('remCustomMsg') ? $('remCustomMsg').value.trim() : ''
@@ -1085,12 +1198,12 @@
     slotSig = '';
     save();
     render();
+    syncPush();
     if (showToast) {
       const msg = $('remMsg');
       if (msg) {
-        msg.textContent = state.rem.lineOn
-          ? 'บันทึกตารางเวลาและเปิดแจ้งเตือน LINE (@943raake) แล้ว'
-          : 'บันทึกการตั้งค่าแล้ว';
+        const modeTxt = state.rem.lineMode === 'summary_only' ? 'ประหยัดสูงสุด (วันละ 1 ครั้ง)' : state.rem.lineMode === 'all' ? 'แจ้งเตือนครบทุกแก้ว' : 'ประหยัดโควตา ~90%';
+        msg.textContent = `บันทึกแล้ว! Web Push: ${state.rem.on ? 'เปิด (ฟรีไม่จำกัด)' : 'ปิด'} • LINE: ${state.rem.lineOn ? modeTxt : 'ปิด'}`;
       }
       toast('บันทึกการตั้งค่าแจ้งเตือนแล้ว');
     }
@@ -1100,7 +1213,7 @@
     e.preventDefault();
     syncRemInputsToState(true);
   };
-  ['wake', 'sleep', 'glass', 'lineOn', 'nightSummaryOn', 'remTone', 'remCustomMsg'].forEach(id => {
+  ['wake', 'sleep', 'glass', 'lineOn', 'lineMode', 'nightSummaryOn', 'remTone', 'remCustomMsg'].forEach(id => {
     const el = $(id);
     if (el) el.addEventListener('change', () => syncRemInputsToState(false));
   });
@@ -1123,8 +1236,9 @@
     const origText = btn ? btn.textContent : '';
     const msg = $('remMsg');
     Object.assign(state.rem, {
-      on: false,
+      on: $('remOn') ? $('remOn').checked : !!state.rem.on,
       lineOn: true,
+      lineMode: $('lineMode') ? $('lineMode').value : (state.rem.lineMode || 'saver'),
       nightSummaryOn: $('nightSummaryOn') ? $('nightSummaryOn').checked : true,
       tone: $('remTone') ? $('remTone').value : 'health',
       customMsg: $('remCustomMsg') ? $('remCustomMsg').value.trim() : ''
@@ -1412,11 +1526,14 @@
     }
     $('wake').value = state.rem.wake; $('sleep').value = state.rem.sleep;
     $('glass').value = state.rem.glass;
-    state.rem.on = false;
+    state.rem.on = !!state.rem.on && (!('Notification' in window) || Notification.permission === 'granted');
+    if ($('remOn')) $('remOn').checked = !!state.rem.on;
     $('lineOn').checked = state.rem.lineOn !== false;
+    if ($('lineMode')) $('lineMode').value = state.rem.lineMode || 'saver';
     if ($('nightSummaryOn')) $('nightSummaryOn').checked = state.rem.nightSummaryOn !== false;
     if ($('remTone')) $('remTone').value = state.rem.tone || 'health';
     if ($('remCustomMsg')) $('remCustomMsg').value = state.rem.customMsg || '';
+    updateWebPushUI();
     renderLineLinkState();
     render();
   }
@@ -1667,8 +1784,16 @@
 
   // Optional Google Identity Services (GIS) button + server-wide LINE bot info
   fetch('/api/vapid-public-key').then(r => r.json()).then(({ googleClientId, hasDefaultLineToken, lineBotInfo, tutorialYouTubeId, lineQuota }) => {
-    if (lineQuota && $('lineQuotaNotice')) {
-      $('lineQuotaNotice').hidden = !lineQuota.isExceeded;
+    if (lineQuota) {
+      if ($('lineQuotaNotice')) $('lineQuotaNotice').hidden = !lineQuota.isExceeded;
+      const pill = $('lineQuotaPill');
+      if (pill) {
+        pill.hidden = false;
+        pill.textContent = lineQuota.isExceeded
+          ? `โควตา Push เต็มแล้ว (${lineQuota.used}/${lineQuota.limit})`
+          : `เหลือโควตา Push ${lineQuota.remaining}/${lineQuota.limit}`;
+        pill.className = 'quota-pill ' + (lineQuota.isExceeded ? 'full' : lineQuota.remaining <= 60 ? 'low' : '');
+      }
     }
     if (tutorialYouTubeId) {
       activeTutorialYouTubeId = tutorialYouTubeId;

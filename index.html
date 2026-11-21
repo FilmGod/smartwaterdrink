@@ -28,11 +28,11 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=29">
 <link rel="icon" type="image/svg+xml" href="icon.svg?v=29">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=29">
-<link rel="manifest" href="manifest.json?v=35">
+<link rel="manifest" href="manifest.json?v=36">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;700&family=Mitr:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=35">
+<link rel="stylesheet" href="styles.css?v=36">
 </head>
 <body>
 
@@ -364,17 +364,36 @@
         <div class="panel-card band tint">
           <div class="col">
             <h2>แจ้งเตือนให้ดื่มน้ำ</h2>
-            <p class="lead">กระจายเวลาเตือนตามเวลาที่คุณตื่นอยู่ และเตือนเฉพาะตอนที่ดื่มช้ากว่าแผนผ่าน <strong>แชต LINE (@943raake)</strong></p>
+            <p class="lead">ใช้ <strong>Web Push ฟรีไม่จำกัด</strong> เตือนทุกแก้วคู่กับ <strong>LINE (@943raake) โหมดประหยัดโควตา</strong> เพื่อใช้งานได้ครบทั้งเดือนโดยไม่เสียค่าใช้จ่าย</p>
             <div class="slots-box">
               <p class="muted">ตารางเวลาเตือนวันนี้</p>
               <ol id="slots" class="slots" aria-label="เวลาที่จะเตือน"></ol>
             </div>
 
+            <!-- Web Push (Unlimited Free Card) -->
+            <div class="push-card" id="webPushCard">
+              <div class="push-head">
+                <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+                  <span class="push-free-badge">ฟรี • ไม่จำกัด</span>
+                  <strong>🔔 แจ้งเตือนบนเครื่อง (Web Push)</strong>
+                </div>
+              </div>
+              <label class="check">
+                <span>เปิดรับแจ้งเตือนบนหน้าจอมือถือ/คอม (เตือนแม้ปิดเว็บ)</span>
+                <input type="checkbox" id="remOn">
+              </label>
+              <p id="webPushStatusText" class="note">แตะเปิดสวิตช์ด้านบน เพื่อรับแจ้งเตือนทุกแก้วฟรี 100% ไม่จำกัดจำนวนครั้ง</p>
+              <div class="add" style="margin-top:.15rem">
+                <button type="button" id="testWebPushBtn" class="mini-pill active">🔔 ทดสอบแจ้งเตือน Web Push</button>
+              </div>
+            </div>
+
             <div class="line-card" id="lineCardBox">
               <div class="line-head" style="justify-content:space-between;flex-wrap:wrap">
-                <div style="display:flex;align-items:center;gap:.55rem">
+                <div style="display:flex;align-items:center;gap:.55rem;flex-wrap:wrap">
                   <span class="line-badge">LINE</span>
-                  <strong>แจ้งเตือนผ่านแชต LINE (@943raake)</strong>
+                  <strong>แชตบอท LINE (@943raake)</strong>
+                  <span id="lineQuotaPill" class="quota-pill" hidden>โควตา: –</span>
                 </div>
                 <button type="button" id="toggleLineSettingsBtn" class="mini-pill" hidden>⚙️ ปรับแต่งการ์ด ▾</button>
               </div>
@@ -421,10 +440,17 @@
 
               <!-- Collapsible LINE Customization Settings -->
               <div id="lineSettingsBody" style="display:grid;gap:.7rem">
-                <label class="check"><input type="checkbox" id="lineOn" checked> เปิดส่งแจ้งเตือนเข้า LINE</label>
+                <label class="check"><input type="checkbox" id="lineOn" checked> เปิดใช้บอท LINE OA</label>
                 <label class="check"><input type="checkbox" id="nightSummaryOn" checked> ส่งการ์ดสรุปผลประจำวันอัตโนมัติก่อนนอน</label>
 
                 <div class="fields" style="margin-top:.1rem">
+                  <label>โหมดประหยัดโควตา LINE Push (300 ข้อความ/เดือน)
+                    <select id="lineMode">
+                      <option value="saver">🛡️ ประหยัดโควตา ~90% (แนะนำ) — Web Push เตือนทุกแก้ว, LINE เฉพาะขาดน้ำมาก + สรุปเย็น</option>
+                      <option value="summary_only">🌙 ประหยัดสูงสุด (วันละ 1 ครั้ง) — LINE ส่งเฉพาะการ์ดสรุปก่อนนอน</option>
+                      <option value="all">📢 แจ้งเตือนเข้า LINE ครบทุกแก้ว (ใช้โควตาเยอะสุด)</option>
+                    </select>
+                  </label>
                   <label>สไตล์คำพูดแจ้งเตือนของบอท
                     <select id="remTone">
                       <option value="health">🩺 สายสุขภาพ (ข้อมูลดูแลร่างกาย)</option>
@@ -887,6 +913,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="fx" class="fx" aria-hidden="true"></div>
-<script src="app.js?v=35"></script>
+<script src="app.js?v=36"></script>
 </body>
 </html>
